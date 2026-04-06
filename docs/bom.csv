@@ -1,0 +1,25 @@
+Category,Part,Spec,Qty,Unit_Price_CNY,Total_CNY,Taobao_Keyword,Priority,Notes
+Electronics,DS3218 Servo,270° 20kg metal gear,12,40,480,DS3218 舵机 20kg 270度 金属齿,P0,Core actuators
+Electronics,PCA9685 Servo Driver,16-ch PWM I2C,1,15,15,PCA9685 舵机驱动板 16路,P0,Servo controller
+Electronics,MPU6050 IMU,GY-521 6-axis,1,8,8,MPU6050 GY-521 模块,P0,Balance feedback
+Power,2S LiPo Battery,7.4V 5000mAh 30C XT60,1,120,120,2S锂电池 7.4V 5000mah XT60,P0,Main power
+Power,Balance Charger,B3 2S/3S,1,35,35,B3平衡充电器 2S 3S,P0,Battery charger
+Power,LM2596 Buck Converter,DC-DC adjustable,2,8,16,LM2596 降压模块 可调,P0,5V for Pi + 6V for servos
+Power,Power Switch,10A toggle,1,5,5,大电流拨动开关 10A,P0,Main power switch
+Power,XT60 Connectors,Male+Female pair,4,2.5,10,XT60 接头 公母,P0,Battery connection
+Power,Silicone Wire 14AWG,Red+Black 1m each,2,5,10,14AWG 硅胶线 红黑,P0,Power wiring
+Wiring,Servo Extension Cable,30cm,12,1.7,20,舵机延长线 30cm,P0,Servo to PCA9685
+Wiring,Dupont Wires,40P M-F + F-F,2,7.5,15,杜邦线 40P 公母 母母,P0,I2C + GPIO
+Structure,Acrylic Plate,3mm laser cut 200×110mm,2,50,100,亚克力 激光切割 来图定制 3mm,P1,Body top+bottom plates
+Structure,Servo U-Bracket,Aluminum for DS3218,12,5,60,舵机支架 铝合金 U型 标准,P1,Servo mounting
+Structure,3D Print Parts,PLA hip+leg brackets,1,80,80,3D打印 PLA 来图定制,P1,Hip brackets + leg links
+Structure,MR105ZZ Bearing,5×10×4mm miniature,16,2,32,MR105ZZ 微型轴承 5x10x4,P1,Joint dual-support
+Structure,Silicone Foot Pad,Hemisphere 15mm,4,3,12,硅胶脚垫 半球 15mm,P1,Ground contact
+Fasteners,M3 Screw Kit,M3×8 + M3×12 socket cap,1,25,25,M3 不锈钢内六角螺丝套装,P1,Assembly
+Fasteners,M3×30 Standoff,Brass M/F,8,1.5,12,M3×30 铜柱 六角隔离柱,P1,Body plate spacing
+Fasteners,Zip Ties + Heat Shrink,Mixed pack,1,10,10,扎带 热缩管 混装,P1,Cable management
+Fasteners,Velcro Strap,20mm width,2,3,6,魔术贴绑带 20mm,P1,Battery mounting
+Optional,Battery Alarm,2S low-voltage buzzer,1,5,5,2S低压报警器 锂电池,P2,Battery protection
+Optional,BNO055 IMU,9-axis absolute orientation,1,80,80,BNO055 九轴 IMU 模块,P2,Upgrade from MPU6050
+Optional,USB Camera,Wide-angle 720p,1,40,40,USB广角摄像头 720P 免驱,P2,Vision (Month 3)
+Optional,Pi Heatsink,Aluminum adhesive,1,5,5,树莓派散热片 铝 贴片,P2,Thermal management
