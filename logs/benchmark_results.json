@@ -1,0 +1,64 @@
+[
+  {
+    "name": "Static Stability",
+    "metric": "CoM Height",
+    "mean_height_m": 0.1638,
+    "height_std_m": 0.0,
+    "min_height_m": 0.1638,
+    "pass": true,
+    "elapsed_s": 0.5
+  },
+  {
+    "name": "Dynamic Stability",
+    "metric": "Roll/Pitch bounds during trot",
+    "roll_max_deg": 5.7,
+    "pitch_max_deg": 7.11,
+    "roll_std_deg": 2.652,
+    "pitch_std_deg": 2.386,
+    "min_height_m": 0.1412,
+    "pass": true,
+    "elapsed_s": 1.6
+  },
+  {
+    "name": "Locomotion Speed",
+    "metric": "Forward velocity",
+    "forward_distance_m": 0.622,
+    "total_2d_distance_m": 0.624,
+    "avg_speed_m_per_s": 0.0311,
+    "avg_speed_body_len_per_s": 0.16,
+    "pass": true,
+    "elapsed_s": 2.2
+  },
+  {
+    "name": "Heading Accuracy",
+    "metric": "Yaw control with PID",
+    "peak_yaw_deg": 34.47,
+    "final_yaw_deg": 2.96,
+    "yaw_at_10s_deg": 30.19,
+    "yaw_at_20s_deg": 13.2,
+    "converged": true,
+    "pass": true,
+    "elapsed_s": 3.2
+  },
+  {
+    "name": "Cost of Transport",
+    "metric": "Energy / (m*g*d)",
+    "total_energy_J": 88.367,
+    "forward_distance_m": 0.622,
+    "CoT": 5.84,
+    "CoT_rating": "Good",
+    "pass": true,
+    "elapsed_s": 2.5
+  },
+  {
+    "name": "Disturbance Rejection",
+    "metric": "Lateral push 3.0N for 100ms at t=5.0s",
+    "survived": "True",
+    "min_height_after_push_m": 0.1402,
+    "max_roll_after_push_deg": 5.67,
+    "recovered": true,
+    "recovery_time_s": 0.108,
+    "pass": "True",
+    "elapsed_s": 1.7
+  }
+]
