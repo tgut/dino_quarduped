@@ -49,7 +49,7 @@ class DinoQuadrupedEnv(gym.Env):
     """
     Gymnasium environment for Dino Quadruped locomotion.
 
-    Observation (dim=36):
+    Observation (dim=40):
         - body height (1)
         - body roll, pitch, yaw (3)
         - body linear velocity (3)
@@ -57,6 +57,7 @@ class DinoQuadrupedEnv(gym.Env):
         - joint angles (12)
         - joint velocities (12)
         - phase clock: sin(t), cos(t) (2)
+        - foot contacts: FL, FR, RL, RR (4)
 
     Action (dim=12):
         - target joint angles, normalized to [-1, 1]
@@ -82,7 +83,7 @@ class DinoQuadrupedEnv(gym.Env):
         self.control_dt = self.dt * self.action_repeat
 
         # Spaces
-        obs_dim = 36
+        obs_dim = 40
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float32
         )
@@ -209,7 +210,7 @@ class DinoQuadrupedEnv(gym.Env):
         return torques
 
     def _get_obs(self):
-        """Build observation vector (dim=36)."""
+        """Build observation vector (dim=40)."""
         pos, orn = p.getBasePositionAndOrientation(
             self._robot, physicsClientId=self._physics_client
         )
@@ -231,6 +232,18 @@ class DinoQuadrupedEnv(gym.Env):
         phase_sin = np.sin(2 * np.pi * freq * self._t)
         phase_cos = np.cos(2 * np.pi * freq * self._t)
 
+        # Foot contact detection (use foot links, not knee links)
+        foot_contacts = np.zeros(4, dtype=np.float32)
+        foot_link_names = ["fl_foot_joint", "fr_foot_joint", "rl_foot_joint", "rr_foot_joint"]
+        for fi, fname in enumerate(foot_link_names):
+            if fname in self._joint_map:
+                link_idx = self._joint_map[fname]
+                contacts = p.getContactPoints(
+                    bodyA=self._robot, linkIndexA=link_idx,
+                    physicsClientId=self._physics_client
+                )
+                foot_contacts[fi] = 1.0 if len(contacts) > 0 else 0.0
+
         obs = np.concatenate([
             [pos[2]],                              # body height (1)
             list(euler),                           # roll, pitch, yaw (3)
@@ -238,7 +251,8 @@ class DinoQuadrupedEnv(gym.Env):
             list(ang_vel),                         # angular velocity (3)
             joint_angles,                          # joint angles (12)
             joint_vels,                            # joint velocities (12)
-            [phase_sin, phase_cos],                # phase clock (2)
+            [phase_sin, phase_cos],                # phase clock (2) [idx 34-35]
+            foot_contacts,                         # foot contacts (4) [idx 36-39]
         ]).astype(np.float32)
 
         return obs

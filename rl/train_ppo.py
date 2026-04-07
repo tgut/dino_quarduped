@@ -191,12 +191,14 @@ def evaluate(args):
     print("  Evaluating RL Policy vs Hand-Tuned Baseline")
     print("=" * 60)
 
+    # Prefer best_model (from EvalCallback) over latest checkpoint
     model_path = os.path.join(BEST_MODEL_PATH, "best_model.zip")
     if not os.path.exists(model_path):
         model_path = os.path.join(MODEL_DIR, "latest_model.zip")
     if not os.path.exists(model_path):
         print("  No trained model found. Run training first.")
         return
+    print(f"  Using model: {model_path}")
 
     # Load model
     env = SubprocVecEnv([make_env(0)])
