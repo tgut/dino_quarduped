@@ -1,0 +1,14 @@
+{
+  "baseline": {
+    "total_reward": 109.8322867727114,
+    "steps": 300,
+    "distance_m": 0.020510178972962874,
+    "avg_speed_m_per_s": 0.004102035794592574
+  },
+  "rl_policy_500k": {
+    "total_reward": 47.03042006127798,
+    "steps": 46,
+    "distance_m": 0.2535316942303982,
+    "avg_speed_m_per_s": 0.33069351421356286
+  }
+}
