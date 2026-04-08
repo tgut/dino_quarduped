@@ -1,14 +1,14 @@
 {
   "baseline": {
-    "total_reward": 807.7115800547698,
-    "steps": 300,
-    "distance_m": 0.020510178972962874,
-    "avg_speed_m_per_s": 0.004102035794592574
+    "total_reward": 3477.9774174625013,
+    "steps": 600,
+    "distance_m": 0.022516183105729434,
+    "avg_speed_m_per_s": 0.004503236621145887
   },
   "rl_policy_latest": {
-    "total_reward": 992.8293278786942,
-    "steps": 405,
-    "distance_m": 1.0975657057729926,
-    "avg_speed_m_per_s": 0.16260232678118408
+    "total_reward": 12320.53849240568,
+    "steps": 2000,
+    "distance_m": 3.8204889201848524,
+    "avg_speed_m_per_s": 0.22922933521109112
   }
 }

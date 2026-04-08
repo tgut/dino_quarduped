@@ -218,11 +218,11 @@ def main():
 
     # 2. Record baseline video (neutral standing / random)
     print("\n[2/3] Recording baseline video (neutral pose)...")
-    env_baseline = DinoQuadrupedEnv(render_mode="rgb_array", max_episode_steps=300)
+    env_baseline = DinoQuadrupedEnv(render_mode="rgb_array", max_episode_steps=600)
     baseline_stats = record_video(
         env_baseline, random_policy,
-        os.path.join(OUTPUT_DIR, "baseline_neutral.mp4"),
-        max_steps=300,
+        os.path.join(OUTPUT_DIR, "baseline_v7.mp4"),
+        max_steps=600,
     )
     env_baseline.close()
     print(f"  Baseline: {baseline_stats['steps']} steps, "
@@ -231,7 +231,7 @@ def main():
 
     # 3. Record RL policy video
     print("\n[3/3] Recording RL policy video...")
-    env_rl = DinoQuadrupedEnv(render_mode="rgb_array", max_episode_steps=1000)
+    env_rl = DinoQuadrupedEnv(render_mode="rgb_array", max_episode_steps=2000)
 
     model_path = os.path.join(MODEL_DIR, "latest_model.zip")
     norm_path = os.path.join(MODEL_DIR, "latest_vecnormalize.pkl")
@@ -239,8 +239,8 @@ def main():
 
     rl_stats = record_video(
         env_rl, rl_policy,
-        os.path.join(OUTPUT_DIR, "rl_policy_latest.mp4"),
-        max_steps=1000,
+        os.path.join(OUTPUT_DIR, "rl_v7_policy.mp4"),
+        max_steps=2000,
     )
     env_rl.close()
     print(f"  RL Policy: {rl_stats['steps']} steps, "
@@ -270,8 +270,8 @@ def main():
 
     print(f"\n  Output files in: {OUTPUT_DIR}/")
     print(f"    - training_curves.png")
-    print(f"    - baseline_neutral.mp4")
-    print(f"    - rl_policy_latest.mp4")
+    print(f"    - baseline_v7.mp4")
+    print(f"    - rl_v7_policy.mp4")
     print(f"    - eval_summary.json")
 
 
