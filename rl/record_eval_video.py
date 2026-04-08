@@ -154,7 +154,7 @@ def plot_training_curves(log_path, output_path):
     max_rewards = [d["max_reward"] for d in data]
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    fig.suptitle("Dino Quadruped RL Training Progress (500K Steps)", fontsize=16, fontweight="bold")
+    fig.suptitle("Dino Quadruped RL Training Progress", fontsize=16, fontweight="bold")
 
     # Mean Reward
     ax = axes[0, 0]
@@ -230,7 +230,7 @@ def main():
           f"speed={baseline_stats['avg_speed_m_per_s']:.4f} m/s")
 
     # 3. Record RL policy video
-    print("\n[3/3] Recording RL policy video (500K model)...")
+    print("\n[3/3] Recording RL policy video...")
     env_rl = DinoQuadrupedEnv(render_mode="rgb_array", max_episode_steps=1000)
 
     model_path = os.path.join(MODEL_DIR, "latest_model.zip")
@@ -239,7 +239,7 @@ def main():
 
     rl_stats = record_video(
         env_rl, rl_policy,
-        os.path.join(OUTPUT_DIR, "rl_policy_500k.mp4"),
+        os.path.join(OUTPUT_DIR, "rl_policy_latest.mp4"),
         max_steps=1000,
     )
     env_rl.close()
@@ -263,7 +263,7 @@ def main():
     # Save summary
     summary = {
         "baseline": baseline_stats,
-        "rl_policy_500k": rl_stats,
+        "rl_policy_latest": rl_stats,
     }
     with open(os.path.join(OUTPUT_DIR, "eval_summary.json"), "w") as f:
         json.dump(summary, f, indent=2)
@@ -271,7 +271,7 @@ def main():
     print(f"\n  Output files in: {OUTPUT_DIR}/")
     print(f"    - training_curves.png")
     print(f"    - baseline_neutral.mp4")
-    print(f"    - rl_policy_500k.mp4")
+    print(f"    - rl_policy_latest.mp4")
     print(f"    - eval_summary.json")
 
 

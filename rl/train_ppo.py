@@ -123,26 +123,27 @@ def train(args):
         if os.path.exists(norm_path):
             env = VecNormalize.load(norm_path, env)
     else:
-        print("\n  Creating new PPO model...")
+        print("\n  Creating new PPO model (v6 optimized hyperparams)...")
         model = PPO(
             "MlpPolicy",
             env,
             learning_rate=3e-4,
-            n_steps=2048,
-            batch_size=64,
+            n_steps=4096,          # v6: 2048→4096, more stable gradients
+            batch_size=128,        # v6: 64→128, larger mini-batches
             n_epochs=10,
             gamma=0.99,
             gae_lambda=0.95,
             clip_range=0.2,
-            ent_coef=0.01,         # encourage exploration
+            ent_coef=0.005,        # v6: 0.01→0.005, less random exploration
             vf_coef=0.5,
             max_grad_norm=0.5,
             policy_kwargs=dict(
-                net_arch=dict(pi=[256, 256], vf=[256, 256]),
+                net_arch=dict(pi=[256, 128, 64], vf=[256, 128, 64]),  # v6: 3-layer
             ),
             tensorboard_log=TB_DIR,
             verbose=1,
             seed=args.seed,
+            device="cuda",
         )
 
     # Callbacks

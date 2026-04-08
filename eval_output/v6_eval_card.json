@@ -1,0 +1,26 @@
+{
+  "header": {
+    "template": "green",
+    "title": {"tag": "plain_text", "content": "🦕 v6 训练完成 + 评测报告"}
+  },
+  "elements": [
+    {"tag": "markdown", "content": "**v6 训练已完成** (2M steps, 8 envs, 优化超参数)\n\n**训练版本演进：**\nv1 两脚跳 → v2 学会躺平 → v3/v4 冲刺摔倒 → v5 懒站 → **v6 稳定行走** ✅"},
+    {"tag": "hr"},
+    {
+      "tag": "div",
+      "fields": [
+        {"is_short": true, "text": {"tag": "lark_md", "content": "**存活步数**\n<font color='green'>1000/1000 (100%)</font>"}},
+        {"is_short": true, "text": {"tag": "lark_md", "content": "**存活率**\n<font color='green'>10/10 全部存活</font>"}},
+        {"is_short": true, "text": {"tag": "lark_md", "content": "**前进速度**\n<font color='green'>0.230 m/s</font>"}},
+        {"is_short": true, "text": {"tag": "lark_md", "content": "**行走距离**\n<font color='green'>4.45 m</font>"}}
+      ]
+    },
+    {"tag": "hr"},
+    {"tag": "markdown", "content": "**对比 Baseline：**\n| 指标 | Baseline | RL v6 | 提升 |\n|------|----------|-------|------|\n| 存活步数 | 300 | **1000** | 3.3x |\n| 前进速度 | 0.005 m/s | **0.230 m/s** | 46x |\n| 行走距离 | 0.02 m | **4.45 m** | 222x |\n| 奖励 | 1619 | **5337** | 3.3x |"},
+    {"tag": "hr"},
+    {"tag": "markdown", "content": "**评测视频（PC浏览器打开）：**\n- [🎬 RL v6 策略视频](http://10.21.31.54:18888/eval_output/rl_v6_policy.mp4)\n- [📊 训练曲线图](http://10.21.31.54:18888/eval_output/training_curves_v6.png)\n- [🎬 Baseline 对比](http://10.21.31.54:18888/eval_output/baseline_v6.mp4)"},
+    {"tag": "hr"},
+    {"tag": "markdown", "content": "**v6 关键优化：**\n1. 指数跟踪奖励（始终为正，防止早死）\n2. 速度为主奖励 3.0×exp + sigma=0.15\n3. PPO优化：8envs, n_steps=4096, 3层网络\n4. 死亡惩罚 -20 + 存活奖励 2.0"},
+    {"tag": "note", "elements": [{"tag": "plain_text", "content": "由 Claude 自动评测生成"}]}
+  ]
+}

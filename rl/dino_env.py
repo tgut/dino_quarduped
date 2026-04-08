@@ -49,7 +49,7 @@ class DinoQuadrupedEnv(gym.Env):
     """
     Gymnasium environment for Dino Quadruped locomotion.
 
-    Observation (dim=40):
+    Observation (dim=41):
         - body height (1)
         - body roll, pitch, yaw (3)
         - body linear velocity (3)
@@ -58,6 +58,7 @@ class DinoQuadrupedEnv(gym.Env):
         - joint velocities (12)
         - phase clock: sin(t), cos(t) (2)
         - foot contacts: FL, FR, RL, RR (4)
+        - body contact: 1 if body/leg touching ground (1)
 
     Action (dim=12):
         - target joint angles, normalized to [-1, 1]
@@ -67,11 +68,23 @@ class DinoQuadrupedEnv(gym.Env):
         - alive bonus
         - energy penalty (joint torques)
         - orientation penalty (roll/pitch)
-        - yaw penalty
+        - gait rewards (trot pattern, foot contact balance)
+        - action smoothness penalty
         - fall termination
     """
 
     metadata = {"render_modes": ["human", "rgb_array"]}
+
+    # Foot link names for contact detection
+    FOOT_LINK_NAMES = ["fl_foot", "fr_foot", "rl_foot", "rr_foot"]
+    # Body/thigh links — contact with ground = bad (stumble/crawl)
+    BODY_LINK_NAMES = [
+        "base_link",
+        "fl_hip", "fl_upper_leg", "fl_lower_leg",
+        "fr_hip", "fr_upper_leg", "fr_lower_leg",
+        "rl_hip", "rl_upper_leg", "rl_lower_leg",
+        "rr_hip", "rr_upper_leg", "rr_lower_leg",
+    ]
 
     def __init__(self, render_mode=None, max_episode_steps=1000):
         super().__init__()
@@ -83,7 +96,7 @@ class DinoQuadrupedEnv(gym.Env):
         self.control_dt = self.dt * self.action_repeat
 
         # Spaces
-        obs_dim = 40
+        obs_dim = 41
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float32
         )
@@ -94,9 +107,12 @@ class DinoQuadrupedEnv(gym.Env):
         # PyBullet
         self._physics_client = None
         self._robot = None
+        self._plane = None
         self._joint_map = {}
+        self._link_name_to_idx = {}  # link name → link index for contact detection
         self._step_count = 0
         self._t = 0.0
+        self._prev_action = np.zeros(12, dtype=np.float32)
 
     def _connect(self):
         if self._physics_client is not None:
@@ -111,7 +127,7 @@ class DinoQuadrupedEnv(gym.Env):
         p.setGravity(0, 0, -9.81, physicsClientId=self._physics_client)
         p.setTimeStep(self.dt, physicsClientId=self._physics_client)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
-        p.loadURDF("plane.urdf", physicsClientId=self._physics_client)
+        self._plane = p.loadURDF("plane.urdf", physicsClientId=self._physics_client)
 
         self._robot = p.loadURDF(
             URDF_PATH,
@@ -121,13 +137,16 @@ class DinoQuadrupedEnv(gym.Env):
             physicsClientId=self._physics_client,
         )
 
-        # Build joint map
+        # Build joint map and link name → index map
         self._joint_map = {}
+        self._link_name_to_idx = {}
         num_joints = p.getNumJoints(self._robot, physicsClientId=self._physics_client)
         for i in range(num_joints):
             info = p.getJointInfo(self._robot, i, physicsClientId=self._physics_client)
-            name = info[1].decode("utf-8")
-            self._joint_map[name] = i
+            joint_name = info[1].decode("utf-8")
+            link_name = info[12].decode("utf-8")  # child link name
+            self._joint_map[joint_name] = i
+            self._link_name_to_idx[link_name] = i
 
         # Disable default motor (we control via torque/position)
         for name in JOINT_NAMES:
@@ -145,6 +164,7 @@ class DinoQuadrupedEnv(gym.Env):
         self._load_robot()
         self._step_count = 0
         self._t = 0.0
+        self._prev_action = np.zeros(12, dtype=np.float32)
 
         # Set initial standing pose
         init_angles = [0, -0.6, -1.2] * 4  # slight crouch
@@ -167,6 +187,8 @@ class DinoQuadrupedEnv(gym.Env):
         self._step_count += 1
         self._t += self.control_dt
 
+        action = np.clip(action, -1.0, 1.0).astype(np.float32)
+
         # Map action [-1,1] to joint angle limits
         target_angles = self._action_to_angles(action)
 
@@ -178,9 +200,19 @@ class DinoQuadrupedEnv(gym.Env):
             p.stepSimulation(physicsClientId=self._physics_client)
 
         obs = self._get_obs()
-        reward, reward_info = self._compute_reward(obs, torques)
+        reward, reward_info = self._compute_reward(obs, torques, action)
         terminated = self._check_termination(obs)
         truncated = self._step_count >= self.max_episode_steps
+
+        # Death penalty — large negative reward on termination (not truncation)
+        # This makes "sprint and crash" strategies unprofitable
+        if terminated:
+            reward -= 20.0
+            reward_info["r_death"] = -20.0
+        else:
+            reward_info["r_death"] = 0.0
+
+        self._prev_action = action.copy()
 
         return obs, reward, terminated, truncated, reward_info
 
@@ -232,17 +264,41 @@ class DinoQuadrupedEnv(gym.Env):
         phase_sin = np.sin(2 * np.pi * freq * self._t)
         phase_cos = np.cos(2 * np.pi * freq * self._t)
 
-        # Foot contact detection (use foot links, not knee links)
+        # Foot contact detection — check foot link vs ground plane
         foot_contacts = np.zeros(4, dtype=np.float32)
-        foot_link_names = ["fl_foot_joint", "fr_foot_joint", "rl_foot_joint", "rr_foot_joint"]
-        for fi, fname in enumerate(foot_link_names):
-            if fname in self._joint_map:
-                link_idx = self._joint_map[fname]
+        for fi, lname in enumerate(self.FOOT_LINK_NAMES):
+            link_idx = self._link_name_to_idx.get(lname)
+            if link_idx is not None:
                 contacts = p.getContactPoints(
-                    bodyA=self._robot, linkIndexA=link_idx,
+                    bodyA=self._robot, bodyB=self._plane,
+                    linkIndexA=link_idx,
                     physicsClientId=self._physics_client
                 )
                 foot_contacts[fi] = 1.0 if len(contacts) > 0 else 0.0
+
+        # Body/leg contact detection — any non-foot touching ground is bad
+        body_contact = 0.0
+        for lname in self.BODY_LINK_NAMES:
+            link_idx = self._link_name_to_idx.get(lname)
+            if link_idx is not None:
+                contacts = p.getContactPoints(
+                    bodyA=self._robot, bodyB=self._plane,
+                    linkIndexA=link_idx,
+                    physicsClientId=self._physics_client
+                )
+                if len(contacts) > 0:
+                    body_contact = 1.0
+                    break
+            # base_link uses linkIndex=-1
+            elif lname == "base_link":
+                contacts = p.getContactPoints(
+                    bodyA=self._robot, bodyB=self._plane,
+                    linkIndexA=-1,
+                    physicsClientId=self._physics_client
+                )
+                if len(contacts) > 0:
+                    body_contact = 1.0
+                    break
 
         obs = np.concatenate([
             [pos[2]],                              # body height (1)
@@ -253,67 +309,157 @@ class DinoQuadrupedEnv(gym.Env):
             joint_vels,                            # joint velocities (12)
             [phase_sin, phase_cos],                # phase clock (2) [idx 34-35]
             foot_contacts,                         # foot contacts (4) [idx 36-39]
+            [body_contact],                        # body touching ground (1) [idx 40]
         ]).astype(np.float32)
 
         return obs
 
-    def _compute_reward(self, obs, torques_list):
+    def _compute_reward(self, obs, torques_list, action):
         """
-        Reward function designed for forward locomotion.
+        Reward function v6 — velocity as primary reward (legged_gym style).
+
+        v5 solved the "die fast" problem but created "lazy standing":
+        alive=3.0 dominated velocity=1.5, so standing gave 6.9/step vs
+        walking 7.0/step — only 1.4% difference, not enough gradient.
+
+        v6 rebalances (based on legged_gym best practices):
+        - Velocity reward DOUBLED (1.5→3.0) with TIGHTER sigma (0.25→0.15)
+        - Alive bonus reduced (3.0→2.0), still safe but not dominant
+        - Walking gives ~1.0 more per step than standing → 15% difference
+        - Still always-positive for random actions → no "die fast" regression
+
+        Math: standing = 2.0 + 2.3 + 1.0 + 0.5 + 1.3 - 1.0 = 6.1/step
+              walking  = 2.0 + 3.0 + 1.0 + 0.5 + 1.3 - 1.0 = 6.8/step
+              random   = 2.0 + 2.0 + 0.5 + 0.1 + 0.3 - 2.5 = 2.4/step (positive!)
+              die@8    = 8 * 2.4 - 20 = -0.8 (bad → don't die)
         """
         height = obs[0]
         roll, pitch, yaw = obs[1], obs[2], obs[3]
         vx, vy, vz = obs[4], obs[5], obs[6]
+        ang_vel_z = obs[9]
+        joint_angles = obs[10:22]
+        joint_vels = obs[22:34]
+        phase_sin, phase_cos = obs[34], obs[35]
+        foot_contacts = obs[36:40]  # FL, FR, RL, RR
+        body_contact = obs[40]
 
-        # 1. Forward velocity reward (main objective)
-        r_velocity = 5.0 * vx  # reward forward, penalize backward
+        n_contacts = np.sum(foot_contacts)
+        fl, fr, rl, rr = foot_contacts
 
-        # 2. Alive bonus
-        r_alive = 0.5
+        # ============================================================
+        # POSITIVE TRACKING REWARDS (always >= 0)
+        # ============================================================
 
-        # 3. Orientation penalty (keep upright)
-        r_orientation = -2.0 * (roll ** 2 + pitch ** 2)
+        # 1. Velocity tracking: PRIMARY reward, tighter sigma
+        #    Perfect match → 3.0, standing(vx=0) → 2.3, backwards → 0.6
+        #    sigma=0.15 (tighter than v5's 0.25) for more precise tracking
+        target_vx = 0.20
+        r_velocity = 3.0 * np.exp(-((vx - target_vx) ** 2) / 0.15)
 
-        # 4. Yaw penalty (go straight)
-        r_yaw = -0.5 * yaw ** 2
+        # 2. Alive bonus — reduced but still safe
+        #    v5 had 3.0 (dominant → lazy standing), now 2.0
+        r_alive = 2.0
 
-        # 5. Lateral velocity penalty (don't drift sideways)
-        r_lateral = -1.0 * vy ** 2
+        # 3. Height tracking: exp reward, always positive
+        target_height = 0.155
+        r_height = 1.0 * np.exp(-((height - target_height) ** 2) / 0.005)
 
-        # 6. Energy penalty (minimize torque)
+        # 4. Orientation tracking: reward for being upright
+        r_orientation = 0.5 * np.exp(-(roll ** 2 + pitch ** 2) / 0.5)
+
+        # ============================================================
+        # GAIT REWARDS (always >= 0)
+        # ============================================================
+
+        # 5. Foot contact: more feet on ground = better (0 to 0.6)
+        r_contact = 0.15 * n_contacts  # 0, 0.15, 0.3, 0.45, 0.6
+
+        # 6. Phase-conditioned trot (0 to 0.5)
+        diag1_stance = fl * rr
+        diag2_stance = fr * rl
+        if phase_sin >= 0:
+            r_gait = 0.5 * (diag1_stance + (1.0 - fr) * (1.0 - rl))
+        else:
+            r_gait = 0.5 * (diag2_stance + (1.0 - fl) * (1.0 - rr))
+
+        # 7. Front-rear symmetry (0 or 0.3)
+        front_any = min(fl + fr, 1.0)
+        rear_any = min(rl + rr, 1.0)
+        r_symmetry = 0.3 * front_any * rear_any
+
+        # ============================================================
+        # MILD PENALTIES (halved from v3/v4, capped total)
+        # These guide behavior but never dominate the alive bonus
+        # ============================================================
+
+        # 8. Body contact penalty (mild)
+        r_body_contact = -0.5 * body_contact
+
+        # 9. Vertical velocity (anti-bounce, moderate)
+        r_vertical = -2.0 * min(vz ** 2, 1.0)  # capped at -2.0
+
+        # 10. Lateral velocity
+        r_lateral = -0.15 * min(vy ** 2, 1.0)  # capped
+
+        # 11. Yaw rate
+        r_yaw = -0.05 * min(ang_vel_z ** 2, 4.0)  # capped
+
+        # 12. Action smoothness (halved)
+        action_diff = action - self._prev_action
+        r_smooth = -0.015 * np.sum(action_diff ** 2)
+
+        # 13. Energy (halved)
         mean_torques = np.mean([np.abs(t) for t in torques_list], axis=0)
-        r_energy = -0.005 * np.sum(mean_torques ** 2)
+        r_energy = -0.0015 * np.sum(mean_torques ** 2)
 
-        # 7. Vertical velocity penalty (don't bounce)
-        r_vertical = -0.5 * vz ** 2
+        # 14. Joint velocity (halved)
+        r_joint_vel = -0.0005 * np.sum(joint_vels ** 2)
 
-        # 8. Joint velocity smoothness
-        joint_vels = obs[16:28]
-        r_smooth = -0.001 * np.sum(joint_vels ** 2)
+        # 15. Default pose regularization (halved)
+        default_angles = np.array([0, -0.6, -1.2] * 4, dtype=np.float32)
+        pose_error = joint_angles - default_angles
+        r_pose = -0.01 * np.sum(pose_error ** 2)
 
-        reward = (r_velocity + r_alive + r_orientation + r_yaw +
-                  r_lateral + r_energy + r_vertical + r_smooth)
+        # ============================================================
+        # TOTAL — designed so random exploration still yields positive reward
+        # ============================================================
+        reward = (r_velocity + r_alive + r_height + r_orientation +
+                  r_contact + r_gait + r_symmetry +
+                  r_body_contact + r_vertical + r_lateral + r_yaw +
+                  r_smooth + r_energy + r_joint_vel + r_pose)
 
         info = {
             "r_velocity": r_velocity,
             "r_alive": r_alive,
+            "r_height": r_height,
             "r_orientation": r_orientation,
+            "r_body_contact": r_body_contact,
+            "r_contact": r_contact,
+            "r_gait": r_gait,
+            "r_symmetry": r_symmetry,
+            "r_vertical": r_vertical,
+            "r_smooth": r_smooth,
             "r_energy": r_energy,
+            "r_pose": r_pose,
             "vx": vx,
             "height": height,
+            "n_contacts": n_contacts,
+            "body_contact": body_contact,
         }
         return float(reward), info
 
     def _check_termination(self, obs):
-        """Terminate if robot falls."""
+        """Terminate if robot falls — moderate thresholds (between v1 and v2)."""
         height = obs[0]
         roll, pitch = obs[1], obs[2]
 
-        # Fell below threshold
-        if height < 0.05:
+        # Height: 0.06m — allows crouching but not belly-on-ground
+        # (v1=0.05 too low, v2=0.08 too high)
+        if height < 0.06:
             return True
-        # Flipped over
-        if abs(roll) > 1.2 or abs(pitch) > 1.2:  # ~70 degrees
+        # Tilt: 1.0 rad (~57°) — clearly falling but not overly strict
+        # (v1=1.2 too loose, v2=0.8 too strict)
+        if abs(roll) > 1.0 or abs(pitch) > 1.0:
             return True
         return False
 

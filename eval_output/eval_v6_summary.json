@@ -1,0 +1,121 @@
+{
+  "version": "v6",
+  "training_steps": "2M",
+  "baseline": {
+    "mean_steps": 300.0,
+    "mean_reward": 1619.0996450797613,
+    "mean_vx": 0.004620740190148354,
+    "video_stats": {
+      "total_reward": 1619.0996450797613,
+      "steps": 300,
+      "distance_m": 0.020510178972962874,
+      "avg_speed_m_per_s": 0.004102035794592574
+    }
+  },
+  "rl_v6": {
+    "mean_steps": 1000.0,
+    "mean_reward": 5336.605068071076,
+    "mean_vx": 0.22990870475769043,
+    "mean_height": 0.12245023250579834,
+    "mean_contacts": 0.5860000252723694,
+    "survived_full": 10,
+    "episodes": [
+      {
+        "episode": 0,
+        "steps": 1000,
+        "total_reward": 5336.605068071076,
+        "mean_vx": 0.22990870475769043,
+        "mean_height": 0.12245023250579834,
+        "mean_contacts": 0.5860000252723694,
+        "terminated": false
+      },
+      {
+        "episode": 1,
+        "steps": 1000,
+        "total_reward": 5336.605068071076,
+        "mean_vx": 0.22990870475769043,
+        "mean_height": 0.12245023250579834,
+        "mean_contacts": 0.5860000252723694,
+        "terminated": false
+      },
+      {
+        "episode": 2,
+        "steps": 1000,
+        "total_reward": 5336.605068071076,
+        "mean_vx": 0.22990870475769043,
+        "mean_height": 0.12245023250579834,
+        "mean_contacts": 0.5860000252723694,
+        "terminated": false
+      },
+      {
+        "episode": 3,
+        "steps": 1000,
+        "total_reward": 5336.605068071076,
+        "mean_vx": 0.22990870475769043,
+        "mean_height": 0.12245023250579834,
+        "mean_contacts": 0.5860000252723694,
+        "terminated": false
+      },
+      {
+        "episode": 4,
+        "steps": 1000,
+        "total_reward": 5336.605068071076,
+        "mean_vx": 0.22990870475769043,
+        "mean_height": 0.12245023250579834,
+        "mean_contacts": 0.5860000252723694,
+        "terminated": false
+      },
+      {
+        "episode": 5,
+        "steps": 1000,
+        "total_reward": 5336.605068071076,
+        "mean_vx": 0.22990870475769043,
+        "mean_height": 0.12245023250579834,
+        "mean_contacts": 0.5860000252723694,
+        "terminated": false
+      },
+      {
+        "episode": 6,
+        "steps": 1000,
+        "total_reward": 5336.605068071076,
+        "mean_vx": 0.22990870475769043,
+        "mean_height": 0.12245023250579834,
+        "mean_contacts": 0.5860000252723694,
+        "terminated": false
+      },
+      {
+        "episode": 7,
+        "steps": 1000,
+        "total_reward": 5336.605068071076,
+        "mean_vx": 0.22990870475769043,
+        "mean_height": 0.12245023250579834,
+        "mean_contacts": 0.5860000252723694,
+        "terminated": false
+      },
+      {
+        "episode": 8,
+        "steps": 1000,
+        "total_reward": 5336.605068071076,
+        "mean_vx": 0.22990870475769043,
+        "mean_height": 0.12245023250579834,
+        "mean_contacts": 0.5860000252723694,
+        "terminated": false
+      },
+      {
+        "episode": 9,
+        "steps": 1000,
+        "total_reward": 5336.605068071076,
+        "mean_vx": 0.22990870475769043,
+        "mean_height": 0.12245023250579834,
+        "mean_contacts": 0.5860000252723694,
+        "terminated": false
+      }
+    ],
+    "video_stats": {
+      "total_reward": 5336.605068071076,
+      "steps": 1000,
+      "distance_m": 4.453943759299066,
+      "avg_speed_m_per_s": 0.2672366255579439
+    }
+  }
+}
