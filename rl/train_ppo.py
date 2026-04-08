@@ -36,7 +36,7 @@ BEST_MODEL_PATH = os.path.join(LOG_DIR, "best_model")
 def make_env(rank, seed=0):
     """Create a single environment instance."""
     def _init():
-        env = DinoQuadrupedEnv(max_episode_steps=1000)
+        env = DinoQuadrupedEnv(max_episode_steps=2000)  # v7: doubled to match action_repeat 4→2
         env.reset(seed=seed + rank)
         return env
     set_random_seed(seed + rank)
@@ -123,7 +123,7 @@ def train(args):
         if os.path.exists(norm_path):
             env = VecNormalize.load(norm_path, env)
     else:
-        print("\n  Creating new PPO model (v6 optimized hyperparams)...")
+        print("\n  Creating new PPO model (v7 anti-tremor hyperparams)...")
         model = PPO(
             "MlpPolicy",
             env,
@@ -277,9 +277,9 @@ def evaluate(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train Dino Quadruped with PPO")
-    parser.add_argument("--timesteps", type=int, default=500_000,
-                        help="Total training timesteps")
-    parser.add_argument("--num-envs", type=int, default=4,
+    parser.add_argument("--timesteps", type=int, default=5_000_000,
+                        help="Total training timesteps (v7: 5M for convergence)")
+    parser.add_argument("--num-envs", type=int, default=8,
                         help="Number of parallel environments")
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed")

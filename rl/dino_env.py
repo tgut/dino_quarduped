@@ -86,13 +86,13 @@ class DinoQuadrupedEnv(gym.Env):
         "rr_hip", "rr_upper_leg", "rr_lower_leg",
     ]
 
-    def __init__(self, render_mode=None, max_episode_steps=1000):
+    def __init__(self, render_mode=None, max_episode_steps=2000):
         super().__init__()
 
         self.render_mode = render_mode
         self.max_episode_steps = max_episode_steps
         self.dt = 1.0 / 240.0
-        self.action_repeat = 4  # apply action for 4 physics steps → 60Hz control
+        self.action_repeat = 2  # v7: 4→2, control freq 60Hz→120Hz for smoother motion
         self.control_dt = self.dt * self.action_repeat
 
         # Spaces
@@ -113,6 +113,7 @@ class DinoQuadrupedEnv(gym.Env):
         self._step_count = 0
         self._t = 0.0
         self._prev_action = np.zeros(12, dtype=np.float32)
+        self._prev_joint_vels = np.zeros(12, dtype=np.float32)  # v7: for joint accel penalty
 
     def _connect(self):
         if self._physics_client is not None:
@@ -165,6 +166,7 @@ class DinoQuadrupedEnv(gym.Env):
         self._step_count = 0
         self._t = 0.0
         self._prev_action = np.zeros(12, dtype=np.float32)
+        self._prev_joint_vels = np.zeros(12, dtype=np.float32)
 
         # Set initial standing pose
         init_angles = [0, -0.6, -1.2] * 4  # slight crouch
@@ -316,22 +318,18 @@ class DinoQuadrupedEnv(gym.Env):
 
     def _compute_reward(self, obs, torques_list, action):
         """
-        Reward function v6 — velocity as primary reward (legged_gym style).
+        Reward function v7 — anti-tremor: smoother gaits via higher control freq + penalties.
 
-        v5 solved the "die fast" problem but created "lazy standing":
-        alive=3.0 dominated velocity=1.5, so standing gave 6.9/step vs
-        walking 7.0/step — only 1.4% difference, not enough gradient.
+        v6 achieved stable forward walking but with visible leg tremor.
+        Root causes: low control freq (60Hz), weak smoothness penalty, short stance phase.
 
-        v6 rebalances (based on legged_gym best practices):
-        - Velocity reward DOUBLED (1.5→3.0) with TIGHTER sigma (0.25→0.15)
-        - Alive bonus reduced (3.0→2.0), still safe but not dominant
-        - Walking gives ~1.0 more per step than standing → 15% difference
-        - Still always-positive for random actions → no "die fast" regression
-
-        Math: standing = 2.0 + 2.3 + 1.0 + 0.5 + 1.3 - 1.0 = 6.1/step
-              walking  = 2.0 + 3.0 + 1.0 + 0.5 + 1.3 - 1.0 = 6.8/step
-              random   = 2.0 + 2.0 + 0.5 + 0.1 + 0.3 - 2.5 = 2.4/step (positive!)
-              die@8    = 8 * 2.4 - 20 = -0.8 (bad → don't die)
+        v7 changes (on top of v6):
+        - action_repeat 4→2 (60Hz→120Hz control) — handled in __init__
+        - Action smoothness penalty: -0.015 → -0.04 (2.7x stronger)
+        - NEW: joint acceleration penalty -0.002 * Σ(Δjoint_vel²)
+        - Foot contact reward: 0.15 → 0.25 per foot (longer stance phase)
+        - Gait phase reward: 0.5 → 0.7 (stronger trot incentive)
+        - Slight alive bonus bump 2.0→2.2 to offset increased penalties
         """
         height = obs[0]
         roll, pitch, yaw = obs[1], obs[2], obs[3]
@@ -356,9 +354,8 @@ class DinoQuadrupedEnv(gym.Env):
         target_vx = 0.20
         r_velocity = 3.0 * np.exp(-((vx - target_vx) ** 2) / 0.15)
 
-        # 2. Alive bonus — reduced but still safe
-        #    v5 had 3.0 (dominant → lazy standing), now 2.0
-        r_alive = 2.0
+        # 2. Alive bonus — slight bump to offset v7's stronger penalties
+        r_alive = 2.2
 
         # 3. Height tracking: exp reward, always positive
         target_height = 0.155
@@ -371,16 +368,18 @@ class DinoQuadrupedEnv(gym.Env):
         # GAIT REWARDS (always >= 0)
         # ============================================================
 
-        # 5. Foot contact: more feet on ground = better (0 to 0.6)
-        r_contact = 0.15 * n_contacts  # 0, 0.15, 0.3, 0.45, 0.6
+        # 5. Foot contact: more feet on ground = better (0 to 1.0)
+        #    v7: 0.15→0.25 per foot, encourage longer stance phase
+        r_contact = 0.25 * n_contacts  # 0, 0.25, 0.5, 0.75, 1.0
 
-        # 6. Phase-conditioned trot (0 to 0.5)
+        # 6. Phase-conditioned trot (0 to 0.7)
+        #    v7: 0.5→0.7, stronger trot incentive for rhythmic gait
         diag1_stance = fl * rr
         diag2_stance = fr * rl
         if phase_sin >= 0:
-            r_gait = 0.5 * (diag1_stance + (1.0 - fr) * (1.0 - rl))
+            r_gait = 0.7 * (diag1_stance + (1.0 - fr) * (1.0 - rl))
         else:
-            r_gait = 0.5 * (diag2_stance + (1.0 - fl) * (1.0 - rr))
+            r_gait = 0.7 * (diag2_stance + (1.0 - fl) * (1.0 - rr))
 
         # 7. Front-rear symmetry (0 or 0.3)
         front_any = min(fl + fr, 1.0)
@@ -404,9 +403,10 @@ class DinoQuadrupedEnv(gym.Env):
         # 11. Yaw rate
         r_yaw = -0.05 * min(ang_vel_z ** 2, 4.0)  # capped
 
-        # 12. Action smoothness (halved)
+        # 12. Action smoothness — v7: STRENGTHENED to reduce tremor
+        #     v6 had -0.015 (too weak → jerky actions), now -0.04
         action_diff = action - self._prev_action
-        r_smooth = -0.015 * np.sum(action_diff ** 2)
+        r_smooth = -0.04 * np.sum(action_diff ** 2)
 
         # 13. Energy (halved)
         mean_torques = np.mean([np.abs(t) for t in torques_list], axis=0)
@@ -415,18 +415,24 @@ class DinoQuadrupedEnv(gym.Env):
         # 14. Joint velocity (halved)
         r_joint_vel = -0.0005 * np.sum(joint_vels ** 2)
 
-        # 15. Default pose regularization (halved)
+        # 15. Joint acceleration — v7 NEW: penalize sudden velocity changes
+        #     This directly discourages the high-freq tremor pattern
+        joint_accel = joint_vels - self._prev_joint_vels
+        r_joint_accel = -0.002 * np.sum(joint_accel ** 2)
+        self._prev_joint_vels = joint_vels.copy()
+
+        # 16. Default pose regularization (halved)
         default_angles = np.array([0, -0.6, -1.2] * 4, dtype=np.float32)
         pose_error = joint_angles - default_angles
         r_pose = -0.01 * np.sum(pose_error ** 2)
 
         # ============================================================
-        # TOTAL — designed so random exploration still yields positive reward
+        # TOTAL — v7: still positive for random exploration
         # ============================================================
         reward = (r_velocity + r_alive + r_height + r_orientation +
                   r_contact + r_gait + r_symmetry +
                   r_body_contact + r_vertical + r_lateral + r_yaw +
-                  r_smooth + r_energy + r_joint_vel + r_pose)
+                  r_smooth + r_energy + r_joint_vel + r_joint_accel + r_pose)
 
         info = {
             "r_velocity": r_velocity,
@@ -440,6 +446,7 @@ class DinoQuadrupedEnv(gym.Env):
             "r_vertical": r_vertical,
             "r_smooth": r_smooth,
             "r_energy": r_energy,
+            "r_joint_accel": r_joint_accel,
             "r_pose": r_pose,
             "vx": vx,
             "height": height,
