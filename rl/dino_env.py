@@ -86,7 +86,30 @@ class DinoQuadrupedEnv(gym.Env):
         "rr_hip", "rr_upper_leg", "rr_lower_leg",
     ]
 
-    def __init__(self, render_mode=None, max_episode_steps=2000):
+    # ── Domain Randomization defaults ─────────────────────────
+    # Each key: (low, high) — sampled uniformly per episode in reset()
+    # Set dr_enabled=False to disable (original v7 behavior)
+    DR_RANGES = {
+        # Dynamics
+        "body_mass_scale":  (0.8,  1.2),    # multiplier on nominal 1.5 kg
+        "friction":         (0.4,  1.0),    # ground lateral friction
+        "joint_damping":    (0.01, 0.1),    # per-joint damping
+        "joint_friction":   (0.0,  0.05),   # per-joint coulomb friction
+        # Actuator
+        "action_delay":     (0,    3),      # steps of delay (int), simulates servo lag
+        "action_noise_std": (0.0,  0.02),   # rad, Gaussian noise on target angles
+        "torque_scale":     (0.8,  1.2),    # multiplier on motor force
+        # Sensor noise (applied to observation)
+        "imu_accel_noise":  (0.0,  0.5),    # m/s² std
+        "imu_gyro_noise":   (0.0,  0.05),   # rad/s std
+        "imu_gyro_drift":   (0.0,  0.01),   # rad/s constant drift per axis
+        # Environment
+        "push_interval":    (100,  300),    # steps between random pushes
+        "push_force":       (0.0,  3.0),    # N, lateral push magnitude
+    }
+
+    def __init__(self, render_mode=None, max_episode_steps=2000,
+                 dr_enabled=False, dr_strength=1.0):
         super().__init__()
 
         self.render_mode = render_mode
@@ -94,6 +117,10 @@ class DinoQuadrupedEnv(gym.Env):
         self.dt = 1.0 / 240.0
         self.action_repeat = 2  # v7: 4→2, control freq 60Hz→120Hz for smoother motion
         self.control_dt = self.dt * self.action_repeat
+
+        # Domain Randomization config
+        self.dr_enabled = dr_enabled
+        self.dr_strength = np.clip(dr_strength, 0.0, 1.0)  # 0=no DR, 1=full range
 
         # Spaces
         obs_dim = 41
@@ -115,6 +142,12 @@ class DinoQuadrupedEnv(gym.Env):
         self._prev_action = np.zeros(12, dtype=np.float32)
         self._prev_joint_vels = np.zeros(12, dtype=np.float32)  # v7: for joint accel penalty
 
+        # DR per-episode state (set in reset)
+        self._dr = {}
+        self._action_delay_buf = []  # ring buffer for action delay
+        self._gyro_drift = np.zeros(3, dtype=np.float32)
+        self._next_push_step = 0
+
     def _connect(self):
         if self._physics_client is not None:
             return
@@ -123,50 +156,126 @@ class DinoQuadrupedEnv(gym.Env):
         else:
             self._physics_client = p.connect(p.DIRECT)
 
+    def set_dr_strength(self, strength):
+        """Update DR strength (called by DRScheduleCallback)."""
+        self.dr_strength = np.clip(strength, 0.0, 1.0)
+
+    def _sample_dr(self):
+        """Sample domain randomization parameters for this episode."""
+        dr = {}
+        if not self.dr_enabled:
+            # Nominal values (no randomization)
+            dr["body_mass_scale"] = 1.0
+            dr["friction"] = 0.7
+            dr["joint_damping"] = 0.05
+            dr["joint_friction"] = 0.01
+            dr["action_delay"] = 0
+            dr["action_noise_std"] = 0.0
+            dr["torque_scale"] = 1.0
+            dr["imu_accel_noise"] = 0.0
+            dr["imu_gyro_noise"] = 0.0
+            dr["imu_gyro_drift"] = 0.0
+            dr["push_interval"] = 9999
+            dr["push_force"] = 0.0
+            return dr
+
+        rng = self.np_random
+        s = self.dr_strength  # interpolation factor: 0=nominal, 1=full range
+        for key, (lo, hi) in self.DR_RANGES.items():
+            nominal = (lo + hi) / 2.0
+            rand_lo = nominal + s * (lo - nominal)
+            rand_hi = nominal + s * (hi - nominal)
+            if key == "action_delay":
+                dr[key] = int(rng.integers(int(rand_lo), int(rand_hi) + 1))
+            else:
+                dr[key] = float(rng.uniform(rand_lo, rand_hi))
+        return dr
+
     def _load_robot(self):
-        p.resetSimulation(physicsClientId=self._physics_client)
-        p.setGravity(0, 0, -9.81, physicsClientId=self._physics_client)
-        p.setTimeStep(self.dt, physicsClientId=self._physics_client)
+        pc = self._physics_client
+        p.resetSimulation(physicsClientId=pc)
+        p.setGravity(0, 0, -9.81, physicsClientId=pc)
+        p.setTimeStep(self.dt, physicsClientId=pc)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
-        self._plane = p.loadURDF("plane.urdf", physicsClientId=self._physics_client)
+        self._plane = p.loadURDF("plane.urdf", physicsClientId=pc)
+
+        # DR: randomize ground friction
+        p.changeDynamics(
+            self._plane, -1,
+            lateralFriction=self._dr["friction"],
+            physicsClientId=pc,
+        )
 
         self._robot = p.loadURDF(
             URDF_PATH,
             basePosition=[0, 0, 0.25],
             baseOrientation=p.getQuaternionFromEuler([0, 0, 0]),
             useFixedBase=False,
-            physicsClientId=self._physics_client,
+            physicsClientId=pc,
         )
 
         # Build joint map and link name → index map
         self._joint_map = {}
         self._link_name_to_idx = {}
-        num_joints = p.getNumJoints(self._robot, physicsClientId=self._physics_client)
+        num_joints = p.getNumJoints(self._robot, physicsClientId=pc)
         for i in range(num_joints):
-            info = p.getJointInfo(self._robot, i, physicsClientId=self._physics_client)
+            info = p.getJointInfo(self._robot, i, physicsClientId=pc)
             joint_name = info[1].decode("utf-8")
             link_name = info[12].decode("utf-8")  # child link name
             self._joint_map[joint_name] = i
             self._link_name_to_idx[link_name] = i
 
-        # Disable default motor (we control via torque/position)
+        # DR: randomize body mass
+        mass_scale = self._dr["body_mass_scale"]
+        dyn = p.getDynamicsInfo(self._robot, -1, physicsClientId=pc)
+        nominal_mass = dyn[0]  # base link mass from URDF
+        p.changeDynamics(
+            self._robot, -1,
+            mass=nominal_mass * mass_scale,
+            physicsClientId=pc,
+        )
+
+        # Disable default motor + DR: randomize joint dynamics
         for name in JOINT_NAMES:
             idx = self._joint_map[name]
             p.setJointMotorControl2(
                 self._robot, idx,
                 controlMode=p.VELOCITY_CONTROL,
                 force=0,
-                physicsClientId=self._physics_client,
+                physicsClientId=pc,
+            )
+            # Apply per-joint damping and friction
+            p.changeDynamics(
+                self._robot, idx,
+                jointDamping=self._dr["joint_damping"],
+                lateralFriction=self._dr["joint_friction"],
+                physicsClientId=pc,
             )
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         self._connect()
+
+        # Sample DR parameters before loading robot
+        self._dr = self._sample_dr()
         self._load_robot()
+
         self._step_count = 0
         self._t = 0.0
         self._prev_action = np.zeros(12, dtype=np.float32)
         self._prev_joint_vels = np.zeros(12, dtype=np.float32)
+
+        # DR: init action delay buffer
+        delay = self._dr["action_delay"]
+        init_act = np.zeros(12, dtype=np.float32)
+        self._action_delay_buf = [init_act.copy() for _ in range(max(delay, 1))]
+
+        # DR: init gyro drift (constant per episode, per axis)
+        drift_mag = self._dr["imu_gyro_drift"]
+        self._gyro_drift = self.np_random.uniform(-drift_mag, drift_mag, size=3).astype(np.float32)
+
+        # DR: schedule first random push
+        self._next_push_step = int(self._dr["push_interval"])
 
         # Set initial standing pose
         init_angles = [0, -0.6, -1.2] * 4  # slight crouch
@@ -191,8 +300,36 @@ class DinoQuadrupedEnv(gym.Env):
 
         action = np.clip(action, -1.0, 1.0).astype(np.float32)
 
+        # DR: action delay — push current action into buffer, use delayed one
+        delay = self._dr["action_delay"]
+        if delay > 0 and self.dr_enabled:
+            self._action_delay_buf.append(action.copy())
+            delayed_action = self._action_delay_buf.pop(0)
+        else:
+            delayed_action = action
+
         # Map action [-1,1] to joint angle limits
-        target_angles = self._action_to_angles(action)
+        target_angles = self._action_to_angles(delayed_action)
+
+        # DR: action noise (simulates servo imprecision)
+        noise_std = self._dr["action_noise_std"]
+        if noise_std > 0 and self.dr_enabled:
+            target_angles = target_angles + self.np_random.normal(0, noise_std, size=12).astype(np.float32)
+
+        # DR: random push
+        if self.dr_enabled and self._step_count >= self._next_push_step:
+            push_mag = self._dr["push_force"]
+            if push_mag > 0:
+                fx = self.np_random.uniform(-push_mag, push_mag)
+                fy = self.np_random.uniform(-push_mag, push_mag)
+                p.applyExternalForce(
+                    self._robot, -1,
+                    forceObj=[fx, fy, 0],
+                    posObj=[0, 0, 0],
+                    flags=p.LINK_FRAME,
+                    physicsClientId=self._physics_client,
+                )
+            self._next_push_step = self._step_count + int(self._dr["push_interval"])
 
         # Apply action for multiple physics steps
         torques = []
@@ -227,6 +364,9 @@ class DinoQuadrupedEnv(gym.Env):
 
     def _apply_joint_targets(self, target_angles):
         """Apply position control and return applied torques."""
+        # DR: scale motor force
+        motor_force = 5.0 * self._dr.get("torque_scale", 1.0)
+
         torques = np.zeros(12, dtype=np.float32)
         for i, name in enumerate(JOINT_NAMES):
             idx = self._joint_map[name]
@@ -234,7 +374,7 @@ class DinoQuadrupedEnv(gym.Env):
                 self._robot, idx,
                 controlMode=p.POSITION_CONTROL,
                 targetPosition=float(target_angles[i]),
-                force=5.0,
+                force=motor_force,
                 maxVelocity=10.0,
                 physicsClientId=self._physics_client,
             )
@@ -244,14 +384,27 @@ class DinoQuadrupedEnv(gym.Env):
         return torques
 
     def _get_obs(self):
-        """Build observation vector (dim=40)."""
+        """Build observation vector (dim=41)."""
         pos, orn = p.getBasePositionAndOrientation(
             self._robot, physicsClientId=self._physics_client
         )
-        euler = p.getEulerFromQuaternion(orn)
+        euler = list(p.getEulerFromQuaternion(orn))
         lin_vel, ang_vel = p.getBaseVelocity(
             self._robot, physicsClientId=self._physics_client
         )
+        lin_vel = list(lin_vel)
+        ang_vel = list(ang_vel)
+
+        # DR: IMU sensor noise
+        if self.dr_enabled:
+            accel_std = self._dr["imu_accel_noise"]
+            gyro_std = self._dr["imu_gyro_noise"]
+            if accel_std > 0:
+                lin_vel = [v + float(self.np_random.normal(0, accel_std)) for v in lin_vel]
+            if gyro_std > 0:
+                ang_vel = [v + float(self.np_random.normal(0, gyro_std)) for v in ang_vel]
+            # Gyro drift (constant per episode, accumulates in orientation)
+            ang_vel = [v + float(d) for v, d in zip(ang_vel, self._gyro_drift)]
 
         joint_angles = np.zeros(12, dtype=np.float32)
         joint_vels = np.zeros(12, dtype=np.float32)
@@ -304,9 +457,9 @@ class DinoQuadrupedEnv(gym.Env):
 
         obs = np.concatenate([
             [pos[2]],                              # body height (1)
-            list(euler),                           # roll, pitch, yaw (3)
-            list(lin_vel),                         # linear velocity (3)
-            list(ang_vel),                         # angular velocity (3)
+            euler,                                 # roll, pitch, yaw (3)
+            lin_vel,                               # linear velocity (3)
+            ang_vel,                               # angular velocity (3)
             joint_angles,                          # joint angles (12)
             joint_vels,                            # joint velocities (12)
             [phase_sin, phase_cos],                # phase clock (2) [idx 34-35]

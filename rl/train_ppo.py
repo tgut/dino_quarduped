@@ -33,14 +33,50 @@ TB_DIR = os.path.join(LOG_DIR, "tensorboard")
 BEST_MODEL_PATH = os.path.join(LOG_DIR, "best_model")
 
 
-def make_env(rank, seed=0):
+def make_env(rank, seed=0, dr_enabled=False, dr_strength=1.0):
     """Create a single environment instance."""
     def _init():
-        env = DinoQuadrupedEnv(max_episode_steps=2000)  # v7: doubled to match action_repeat 4→2
+        env = DinoQuadrupedEnv(
+            max_episode_steps=2000,
+            dr_enabled=dr_enabled,
+            dr_strength=dr_strength,
+        )
         env.reset(seed=seed + rank)
         return env
     set_random_seed(seed + rank)
     return _init
+
+
+class DRScheduleCallback(BaseCallback):
+    """Gradually increase domain randomization strength during training.
+
+    Linearly ramps dr_strength from 0 to 1 over the first `warmup_frac` of training.
+    This lets the policy first learn basic locomotion, then become robust.
+    """
+
+    def __init__(self, total_timesteps, warmup_frac=0.3, verbose=0):
+        super().__init__(verbose)
+        self.total_timesteps = total_timesteps
+        self.warmup_steps = int(total_timesteps * warmup_frac)
+
+    def _on_step(self) -> bool:
+        if self.warmup_steps > 0:
+            strength = min(1.0, self.num_timesteps / self.warmup_steps)
+        else:
+            strength = 1.0
+
+        # Update dr_strength in all vectorized sub-envs
+        venv = self.training_env
+        # Unwrap VecNormalize/VecMonitor to get underlying SubprocVecEnv
+        while hasattr(venv, 'venv'):
+            venv = venv.venv
+        if hasattr(venv, 'env_method'):
+            venv.env_method('set_dr_strength', strength)
+
+        if self.num_timesteps % 50000 == 0 and self.verbose:
+            print(f"  [DR] step={self.num_timesteps}, strength={strength:.2f}")
+
+        return True
 
 
 class RewardLoggerCallback(BaseCallback):
@@ -93,21 +129,28 @@ def train(args):
     os.makedirs(MODEL_DIR, exist_ok=True)
     os.makedirs(TB_DIR, exist_ok=True)
 
+    dr_mode = "ON (progressive)" if args.dr else "OFF"
     print("=" * 60)
     print("  Dino Quadruped RL Training (PPO)")
     print(f"  Timesteps:    {args.timesteps:,}")
     print(f"  Num envs:     {args.num_envs}")
+    print(f"  Domain Rand:  {dr_mode}")
+    if args.dr:
+        print(f"  DR warmup:    first {int(args.dr_warmup * 100)}% of training")
     print(f"  Log dir:      {LOG_DIR}")
     print(f"  TensorBoard:  {TB_DIR}")
     print("=" * 60)
 
-    # Create vectorized environments
-    env = SubprocVecEnv([make_env(i, seed=args.seed) for i in range(args.num_envs)])
+    # Create vectorized environments (DR starts at strength=0 if progressive)
+    env = SubprocVecEnv([
+        make_env(i, seed=args.seed, dr_enabled=args.dr, dr_strength=0.0)
+        for i in range(args.num_envs)
+    ])
     env = VecMonitor(env)
     env = VecNormalize(env, norm_obs=True, norm_reward=True, clip_obs=10.0)
 
-    # Eval env (single, for evaluation callbacks)
-    eval_env = SubprocVecEnv([make_env(100, seed=args.seed + 100)])
+    # Eval env — no DR (test on nominal conditions)
+    eval_env = SubprocVecEnv([make_env(100, seed=args.seed + 100, dr_enabled=False)])
     eval_env = VecMonitor(eval_env)
     eval_env = VecNormalize(eval_env, norm_obs=True, norm_reward=False, clip_obs=10.0)
 
@@ -164,13 +207,24 @@ def train(args):
         log_path=os.path.join(LOG_DIR, "training_log.json")
     )
 
+    callbacks = [checkpoint_cb, eval_cb, reward_logger]
+
+    # DR: progressive schedule callback
+    if args.dr:
+        dr_cb = DRScheduleCallback(
+            total_timesteps=args.timesteps,
+            warmup_frac=args.dr_warmup,
+            verbose=1,
+        )
+        callbacks.append(dr_cb)
+
     # Train
     print(f"\n  Starting training for {args.timesteps:,} timesteps...\n")
     t0 = time.time()
 
     model.learn(
         total_timesteps=args.timesteps,
-        callback=[checkpoint_cb, eval_cb, reward_logger],
+        callback=callbacks,
         progress_bar=True,
     )
 
@@ -287,6 +341,10 @@ if __name__ == "__main__":
                         help="Resume from checkpoint")
     parser.add_argument("--eval", action="store_true",
                         help="Evaluate trained model instead of training")
+    parser.add_argument("--dr", action="store_true",
+                        help="Enable domain randomization for sim2real transfer")
+    parser.add_argument("--dr-warmup", type=float, default=0.3,
+                        help="Fraction of training for DR warmup (0=full DR from start, default 0.3)")
     args = parser.parse_args()
 
     if args.eval:
