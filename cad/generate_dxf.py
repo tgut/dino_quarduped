@@ -130,14 +130,18 @@ def generate_body_top(output_path):
         "layer": "ENGRAVE", "height": 4,
     }).set_placement((RPI_CX, RPI_CY - 2))
 
-    # 4. PCA9685 安装位 (孔距待实测, 暂不开孔)
+    # 4. PCA9685 安装位 (实测: 25×61mm 板, 四角 Φ2mm 孔, 中心距边缘 3mm)
     PCA_CX = 60.0
-    PCA_CY = 28.0
-    # TODO: 收到 PCA9685 后实测安装孔间距，取消注释并修改 dx/dy
-    # PCA_DX = 20.0   # 待实测
-    # PCA_DY = 50.0   # 待实测 (当前值导致孔距板边仅 1.65mm, 疑似有误)
-    # add_mounting_holes_rect(msp, PCA_CX, PCA_CY, PCA_DX, PCA_DY, M2_5_HOLE, "HOLES")
-    add_rect_slot(msp, PCA_CX - 13, max(0, PCA_CY - 25), 26, 50, "ENGRAVE")
+    PCA_CY = 31.0   # 上移: 保证底部孔 y=31-27.5=3.5mm, 距板边 ≥3mm
+    PCA_BOARD_W = 25.0   # 实测板宽
+    PCA_BOARD_H = 61.0   # 实测板长
+    PCA_HOLE_D = 2.2     # Φ2mm 孔 + 0.2mm 余量
+    PCA_DX = PCA_BOARD_W - 3.0 * 2  # 19mm (孔心距边缘 3mm)
+    PCA_DY = PCA_BOARD_H - 3.0 * 2  # 55mm
+    add_mounting_holes_rect(msp, PCA_CX, PCA_CY, PCA_DX, PCA_DY, PCA_HOLE_D, "HOLES")
+    # 标注框 (实际板子尺寸)
+    add_rect_slot(msp, PCA_CX - PCA_BOARD_W / 2, PCA_CY - PCA_BOARD_H / 2,
+                  PCA_BOARD_W, PCA_BOARD_H, "ENGRAVE")
     msp.add_text("PCA9685", dxfattribs={
         "layer": "ENGRAVE", "height": 3.5,
     }).set_placement((PCA_CX - 11, PCA_CY - 2))
