@@ -130,13 +130,14 @@ def generate_body_top(output_path):
         "layer": "ENGRAVE", "height": 4,
     }).set_placement((RPI_CX, RPI_CY - 2))
 
-    # 4. PCA9685 安装位 (4 × M2.5 孔, 约 20mm × 50mm)
+    # 4. PCA9685 安装位 (孔距待实测, 暂不开孔)
     PCA_CX = 60.0
     PCA_CY = 28.0
-    PCA_DX = 20.0
-    PCA_DY = 50.0
-    add_mounting_holes_rect(msp, PCA_CX, PCA_CY, PCA_DX, PCA_DY, M2_5_HOLE, "HOLES")
-    add_rect_slot(msp, PCA_CX - 13, PCA_CY - 30, 26, 60, "ENGRAVE")
+    # TODO: 收到 PCA9685 后实测安装孔间距，取消注释并修改 dx/dy
+    # PCA_DX = 20.0   # 待实测
+    # PCA_DY = 50.0   # 待实测 (当前值导致孔距板边仅 1.65mm, 疑似有误)
+    # add_mounting_holes_rect(msp, PCA_CX, PCA_CY, PCA_DX, PCA_DY, M2_5_HOLE, "HOLES")
+    add_rect_slot(msp, PCA_CX - 13, max(0, PCA_CY - 25), 26, 50, "ENGRAVE")
     msp.add_text("PCA9685", dxfattribs={
         "layer": "ENGRAVE", "height": 3.5,
     }).set_placement((PCA_CX - 11, PCA_CY - 2))
@@ -162,9 +163,9 @@ def generate_body_top(output_path):
     #    电池尺寸约 105×35×25mm (2S 5000mAh)
     #    四角各一个 3.5mm 扎带孔, 用于穿扎带/魔术贴带 固定电池
     BAT_X = 125.0
-    BAT_Y = 35.0
+    BAT_Y = 38.0
     BAT_W = 55.0
-    BAT_H = 45.0
+    BAT_H = 30.0   # 缩小以避免上边扎带孔与 LM2596#2 安装孔过近 (原45→30)
     STRAP_HOLE = 3.5  # 扎带孔直径
     STRAP_INSET = 5.0  # 距标注框边缘
     add_rect_slot(msp, BAT_X, BAT_Y, BAT_W, BAT_H, "ENGRAVE")
@@ -212,22 +213,24 @@ def generate_body_top(output_path):
         "layer": "ENGRAVE", "height": 2.5,
     }).set_placement((LM2_CX - 4, LM2_CY - 8))
 
-    # 8. 电源开关安装孔 (后边缘中央, 圆形开孔 + 螺纹固定)
+    # 8. 电源开关安装孔 (后边缘偏右, 避开中央铜柱)
     #    实际订单: 16mm 金属钮子开关 (带灯, 12-24V, 10A)
-    SWITCH_CX = BOARD_W / 2
-    SWITCH_CY = 6.0  # 靠近底边 (后方)
+    #    铜柱位于 (100, 10)，需要避开; 开关半径 8.25mm 需离板边 ≥9mm
+    SWITCH_CX = 130.0  # 偏右，避开 x=100 铜柱和 x=70 PCA9685 孔
+    SWITCH_CY = 10.0   # 距底边 10mm，确保不超出板材 (半径 8.25 < 10)
     SWITCH_HOLE = 16.5  # 16mm 开关 + 0.5mm 余量
     add_circle(msp, SWITCH_CX, SWITCH_CY, SWITCH_HOLE, "SLOTS")
     msp.add_text("SW", dxfattribs={
         "layer": "ENGRAVE", "height": 3,
-    }).set_placement((SWITCH_CX + 8, SWITCH_CY - 1.5))
+    }).set_placement((SWITCH_CX + 10, SWITCH_CY - 1.5))
 
     # 9. USB 接口开口 (左侧边缘, 方便树莓派 USB 口插拔)
     USB_SLOT_X = 0  # 左边缘
     USB_SLOT_Y = 58.0
     USB_SLOT_W = 3.5  # 板厚方向贯穿
     USB_SLOT_H = 18.0  # 覆盖两个 USB 口高度
-    add_rect_slot(msp, USB_SLOT_X - 0.5, USB_SLOT_Y, USB_SLOT_W, USB_SLOT_H, "SLOTS")
+    # 边缘 U 型开口: x 起点 = 0 (板边), 激光从边缘切入
+    add_rect_slot(msp, USB_SLOT_X, USB_SLOT_Y, USB_SLOT_W, USB_SLOT_H, "SLOTS")
 
     doc.saveas(output_path)
     print(f"  ✓ {output_path}")
