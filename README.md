@@ -126,9 +126,48 @@ tensorboard --logdir rl_logs/tensorboard
    ✅          ⬜           🔄              ⬜
 ```
 
+## 可视化工具
+
+### URDF 模型查看
+
+```bash
+# 快速 3D 查看（带关节控制）
+python3 scripts/quick_view_urdf.py
+
+# 或使用在线 URDF Viewer（无需安装）
+# 访问: https://gkjohnson.github.io/urdf-loaders/javascript/example/bundle/
+# 拖拽: urdf/dino_quadruped.urdf
+```
+
+### DXF 激光切割图查看
+
+```bash
+# 在线查看（推荐）
+# 访问: https://sharecad.org/
+# 上传: cad/body_top.dxf 或 cad/body_bottom.dxf
+
+# 或本地查看
+brew install --cask librecad  # macOS
+librecad cad/body_bottom.dxf
+```
+
+### Three.js 交互式组装图
+
+```bash
+# 浏览器打开
+open cad/assembly_3d_threejs.html
+open cad/assembly_3d_view.html
+```
+
+**详细指南**: [可视化工具使用指南](docs/可视化工具使用指南.md)
+
+---
+
 ## 文档
 
 - [v6 训练详细报告](docs/rl_v6_training_summary.md)
 - [硬件架构](docs/hardware_architecture.md)
 - [机械结构设计](docs/mechanical_design.md)
+- [腿部结构详细说明](docs/腿部结构详细说明.md)
 - [接线图](docs/wiring_diagram.md)
+- [可视化工具使用指南](docs/可视化工具使用指南.md)
