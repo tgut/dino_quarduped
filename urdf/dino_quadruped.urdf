@@ -1,11 +1,44 @@
 <?xml version="1.0" ?>
 <!--
-  Dino Quadruped URDF - Based on SpotMicro dimensions
+  Dino Quadruped URDF - Based on SpotMicro dimensions with detailed hardware specs
   12 DOF: 4 legs × 3 joints (hip_yaw, shoulder_pitch, knee_pitch)
 
-  Coordinate: X-forward, Y-left, Z-up
-  Body dimensions: 0.20m × 0.11m × 0.06m (LxWxH)
-  Upper leg: 0.10m, Lower leg: 0.10m
+  ## Coordinate System
+  X-forward, Y-left, Z-up (ROS standard)
+
+  ## Body Structure
+  - Dimensions: 0.20m × 0.11m × 0.036m (200×110×36mm)
+  - Top plate: 3mm acrylic, 200×110mm (electronics mount)
+  - Bottom plate: 3mm acrylic, 200×110mm (servo mount)
+  - Spacing: 8× M3×30mm brass standoffs
+  - Total height: 3mm + 30mm + 3mm = 36mm
+
+  ## Servo Specifications (DS3218)
+  - Model: DS3218 (PWM analog servo)
+  - Quantity: 12 (3 per leg × 4 legs)
+  - Torque: 21 kg·cm @ 6V
+  - Speed: 60°/0.16s @ 6V
+  - Angle range: 270° (modified from 180°)
+  - Weight: 60g per servo
+  - Dimensions: 40.7 × 20.2 × 36.2 mm
+  - Control: PCA9685 (I2C address 0x40, CH0-11)
+  - PWM range: 500-2500μs (0° to 270°)
+
+  ## Mounting Hardware
+  - U-brackets: 12× aluminum alloy (40mm lateral offset for hip servos)
+  - Bearings: 16× MR105ZZ (dual-support at shoulder/knee joints)
+  - Leg links: 100mm upper leg + 100mm lower leg (aluminum/PLA)
+  - Foot pads: 4× silicone pads, 15mm diameter
+
+  ## Joint Allocation (PCA9685 channels)
+  Hip (X-axis):      CH0(FL) CH1(FR) CH2(RL) CH3(RR)
+  Shoulder (Y-axis): CH4(FL) CH5(FR) CH6(RL) CH7(RR)
+  Knee (Y-axis):     CH8(FL) CH9(FR) CH10(RL) CH11(RR)
+
+  ## Reference Documents
+  - Procurement list: docs/四足机器恐龙_采购清单.xlsx
+  - Mechanical design: docs/机械结构设计.md
+  - Leg structure: docs/腿部结构详细说明.md
 -->
 <robot name="dino_quadruped">
 
@@ -35,7 +68,17 @@
 
   <!-- ==================== MACRO-LIKE: FRONT LEFT LEG ==================== -->
 
-  <!-- FL Hip -->
+  <!-- ==================== FRONT LEFT (FL) LEG ==================== -->
+
+  <!-- FL Hip Joint
+       - Servo: DS3218 (CH0)
+       - Function: Left-right leg abduction (外展/内收)
+       - Rotation axis: X-axis (along body length)
+       - Range: ±28.6° (±0.5 rad)
+       - Mounting: Bottom plate at (80mm, 55mm) from center
+       - Torque: 21 kg·cm @ 6V
+       - PWM: 1500μs (neutral), 500-2500μs range
+  -->
   <link name="fl_hip">
     <inertial>
       <origin xyz="0 0.02 0" rpy="0 0 0"/>
@@ -61,7 +104,45 @@
     <limit lower="-0.5" upper="0.5" effort="10" velocity="5"/>
   </joint>
 
-  <!-- FL Upper Leg -->
+  <!-- FL Hip Bracket (U-bracket for shoulder servo mounting) -->
+  <link name="fl_hip_bracket">
+    <inertial>
+      <origin xyz="0 0.02 -0.01" rpy="0 0 0"/>
+      <mass value="0.05"/>
+      <inertia ixx="0.000005" ixy="0" ixz="0" iyy="0.000008" iyz="0" izz="0.000005"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0.02 -0.01" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.02 0.04 0.05"/>
+      </geometry>
+      <material name="bracket_silver">
+        <color rgba="0.7 0.7 0.75 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0.02 -0.01" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.02 0.04 0.05"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="fl_hip_bracket_joint" type="fixed">
+    <parent link="fl_hip"/>
+    <child link="fl_hip_bracket"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- FL Shoulder Joint
+       - Servo: DS3218 (CH4)
+       - Function: Forward-backward upper leg swing (前后摆动)
+       - Rotation axis: Y-axis (lateral direction)
+       - Range: ±90° (±1.57 rad)
+       - Mounting: Inside hip U-bracket at 40mm Y-offset
+       - Bearings: 2× MR105ZZ (dual-support structure)
+       - Connection: Servo horn → upper leg link (M2×8 screws)
+  -->
   <link name="fl_upper_leg">
     <inertial>
       <origin xyz="0 0 -0.05" rpy="0 0 0"/>
@@ -91,7 +172,16 @@
     <limit lower="-1.57" upper="1.57" effort="10" velocity="5"/>
   </joint>
 
-  <!-- FL Lower Leg -->
+  <!-- FL Knee Joint
+       - Servo: DS3218 (CH8)
+       - Function: Lower leg flexion/extension (膝盖弯曲)
+       - Rotation axis: Y-axis (lateral direction)
+       - Range: -149° to -5.7° (-2.6 to -0.1 rad, unidirectional like biological knee)
+       - Neutral: -90° (right angle bend)
+       - Mounting: Upper leg base at -100mm Z-offset
+       - Bearings: 2× MR105ZZ (dual-support structure)
+       - Connection: Servo horn → lower leg link (M2×8 screws)
+  -->
   <link name="fl_lower_leg">
     <inertial>
       <origin xyz="0 0 -0.05" rpy="0 0 0"/>
@@ -119,6 +209,34 @@
     <origin xyz="0 0 -0.10" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
     <limit lower="-2.6" upper="-0.1" effort="10" velocity="5"/>
+  </joint>
+
+  <!-- FL Knee Bracket (U-bracket for knee servo mounting) -->
+  <link name="fl_knee_bracket">
+    <inertial>
+      <origin xyz="0 0 -0.01" rpy="0 0 0"/>
+      <mass value="0.03"/>
+      <inertia ixx="0.000003" ixy="0" ixz="0" iyy="0.000005" iyz="0" izz="0.000003"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 -0.01" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.015 0.03 0.04"/>
+      </geometry>
+      <material name="bracket_silver"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 -0.01" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.015 0.03 0.04"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="fl_knee_bracket_joint" type="fixed">
+    <parent link="fl_upper_leg"/>
+    <child link="fl_knee_bracket"/>
+    <origin xyz="0 0 -0.10" rpy="0 0 0"/>
   </joint>
 
   <!-- FL Foot (contact point) -->
@@ -153,8 +271,15 @@
     <origin xyz="0 0 -0.10" rpy="0 0 0"/>
   </joint>
 
-  <!-- ==================== FRONT RIGHT LEG ==================== -->
+  <!-- ==================== FRONT RIGHT (FR) LEG ==================== -->
 
+  <!-- FR Hip Joint
+       - Servo: DS3218 (CH1)
+       - Function: Left-right leg abduction (mirror of FL)
+       - Rotation axis: X-axis
+       - Range: ±28.6° (±0.5 rad)
+       - Mounting: Bottom plate at (80mm, -55mm) from center
+  -->
   <link name="fr_hip">
     <inertial>
       <origin xyz="0 -0.02 0" rpy="0 0 0"/>
@@ -178,6 +303,42 @@
     <limit lower="-0.5" upper="0.5" effort="10" velocity="5"/>
   </joint>
 
+  <!-- FR Hip Bracket (U-bracket for shoulder servo mounting) -->
+  <link name="fr_hip_bracket">
+    <inertial>
+      <origin xyz="0 -0.02 -0.01" rpy="0 0 0"/>
+      <mass value="0.05"/>
+      <inertia ixx="0.000005" ixy="0" ixz="0" iyy="0.000008" iyz="0" izz="0.000005"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 -0.02 -0.01" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.02 0.04 0.05"/>
+      </geometry>
+      <material name="bracket_silver"/>
+    </visual>
+    <collision>
+      <origin xyz="0 -0.02 -0.01" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.02 0.04 0.05"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="fr_hip_bracket_joint" type="fixed">
+    <parent link="fr_hip"/>
+    <child link="fr_hip_bracket"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- FR Shoulder Joint
+       - Servo: DS3218 (CH5)
+       - Function: Forward-backward upper leg swing
+       - Rotation axis: Y-axis
+       - Range: ±90° (±1.57 rad)
+       - Mounting: Inside hip U-bracket at -40mm Y-offset
+       - Bearings: 2× MR105ZZ
+  -->
   <link name="fr_upper_leg">
     <inertial>
       <origin xyz="0 0 -0.05" rpy="0 0 0"/>
@@ -207,6 +368,14 @@
     <limit lower="-1.57" upper="1.57" effort="10" velocity="5"/>
   </joint>
 
+  <!-- FR Knee Joint
+       - Servo: DS3218 (CH9)
+       - Function: Lower leg flexion/extension
+       - Rotation axis: Y-axis
+       - Range: -149° to -5.7° (-2.6 to -0.1 rad)
+       - Mounting: Upper leg base at -100mm Z-offset
+       - Bearings: 2× MR105ZZ
+  -->
   <link name="fr_lower_leg">
     <inertial>
       <origin xyz="0 0 -0.05" rpy="0 0 0"/>
@@ -236,6 +405,34 @@
     <limit lower="-2.6" upper="-0.1" effort="10" velocity="5"/>
   </joint>
 
+  <!-- FR Knee Bracket (U-bracket for knee servo mounting) -->
+  <link name="fr_knee_bracket">
+    <inertial>
+      <origin xyz="0 0 -0.01" rpy="0 0 0"/>
+      <mass value="0.03"/>
+      <inertia ixx="0.000003" ixy="0" ixz="0" iyy="0.000005" iyz="0" izz="0.000003"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 -0.01" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.015 0.03 0.04"/>
+      </geometry>
+      <material name="bracket_silver"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 -0.01" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.015 0.03 0.04"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="fr_knee_bracket_joint" type="fixed">
+    <parent link="fr_upper_leg"/>
+    <child link="fr_knee_bracket"/>
+    <origin xyz="0 0 -0.10" rpy="0 0 0"/>
+  </joint>
+
   <link name="fr_foot">
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -261,8 +458,15 @@
     <origin xyz="0 0 -0.10" rpy="0 0 0"/>
   </joint>
 
-  <!-- ==================== REAR LEFT LEG ==================== -->
+  <!-- ==================== REAR LEFT (RL) LEG ==================== -->
 
+  <!-- RL Hip Joint
+       - Servo: DS3218 (CH2)
+       - Function: Left-right leg abduction
+       - Rotation axis: X-axis
+       - Range: ±28.6° (±0.5 rad)
+       - Mounting: Bottom plate at (-80mm, 55mm) from center
+  -->
   <link name="rl_hip">
     <inertial>
       <origin xyz="0 0.02 0" rpy="0 0 0"/>
@@ -286,6 +490,42 @@
     <limit lower="-0.5" upper="0.5" effort="10" velocity="5"/>
   </joint>
 
+  <!-- RL Hip Bracket (U-bracket for shoulder servo mounting) -->
+  <link name="rl_hip_bracket">
+    <inertial>
+      <origin xyz="0 0.02 -0.01" rpy="0 0 0"/>
+      <mass value="0.05"/>
+      <inertia ixx="0.000005" ixy="0" ixz="0" iyy="0.000008" iyz="0" izz="0.000005"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0.02 -0.01" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.02 0.04 0.05"/>
+      </geometry>
+      <material name="bracket_silver"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0.02 -0.01" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.02 0.04 0.05"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="rl_hip_bracket_joint" type="fixed">
+    <parent link="rl_hip"/>
+    <child link="rl_hip_bracket"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- RL Shoulder Joint
+       - Servo: DS3218 (CH6)
+       - Function: Forward-backward upper leg swing
+       - Rotation axis: Y-axis
+       - Range: ±90° (±1.57 rad)
+       - Mounting: Inside hip U-bracket at 40mm Y-offset
+       - Bearings: 2× MR105ZZ
+  -->
   <link name="rl_upper_leg">
     <inertial>
       <origin xyz="0 0 -0.05" rpy="0 0 0"/>
@@ -315,6 +555,14 @@
     <limit lower="-1.57" upper="1.57" effort="10" velocity="5"/>
   </joint>
 
+  <!-- RL Knee Joint
+       - Servo: DS3218 (CH10)
+       - Function: Lower leg flexion/extension
+       - Rotation axis: Y-axis
+       - Range: -149° to -5.7° (-2.6 to -0.1 rad)
+       - Mounting: Upper leg base at -100mm Z-offset
+       - Bearings: 2× MR105ZZ
+  -->
   <link name="rl_lower_leg">
     <inertial>
       <origin xyz="0 0 -0.05" rpy="0 0 0"/>
@@ -344,6 +592,34 @@
     <limit lower="-2.6" upper="-0.1" effort="10" velocity="5"/>
   </joint>
 
+  <!-- RL Knee Bracket (U-bracket for knee servo mounting) -->
+  <link name="rl_knee_bracket">
+    <inertial>
+      <origin xyz="0 0 -0.01" rpy="0 0 0"/>
+      <mass value="0.03"/>
+      <inertia ixx="0.000003" ixy="0" ixz="0" iyy="0.000005" iyz="0" izz="0.000003"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 -0.01" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.015 0.03 0.04"/>
+      </geometry>
+      <material name="bracket_silver"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 -0.01" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.015 0.03 0.04"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="rl_knee_bracket_joint" type="fixed">
+    <parent link="rl_upper_leg"/>
+    <child link="rl_knee_bracket"/>
+    <origin xyz="0 0 -0.10" rpy="0 0 0"/>
+  </joint>
+
   <link name="rl_foot">
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -369,8 +645,15 @@
     <origin xyz="0 0 -0.10" rpy="0 0 0"/>
   </joint>
 
-  <!-- ==================== REAR RIGHT LEG ==================== -->
+  <!-- ==================== REAR RIGHT (RR) LEG ==================== -->
 
+  <!-- RR Hip Joint
+       - Servo: DS3218 (CH3)
+       - Function: Left-right leg abduction (mirror of RL)
+       - Rotation axis: X-axis
+       - Range: ±28.6° (±0.5 rad)
+       - Mounting: Bottom plate at (-80mm, -55mm) from center
+  -->
   <link name="rr_hip">
     <inertial>
       <origin xyz="0 -0.02 0" rpy="0 0 0"/>
@@ -394,6 +677,42 @@
     <limit lower="-0.5" upper="0.5" effort="10" velocity="5"/>
   </joint>
 
+  <!-- RR Hip Bracket (U-bracket for shoulder servo mounting) -->
+  <link name="rr_hip_bracket">
+    <inertial>
+      <origin xyz="0 -0.02 -0.01" rpy="0 0 0"/>
+      <mass value="0.05"/>
+      <inertia ixx="0.000005" ixy="0" ixz="0" iyy="0.000008" iyz="0" izz="0.000005"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 -0.02 -0.01" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.02 0.04 0.05"/>
+      </geometry>
+      <material name="bracket_silver"/>
+    </visual>
+    <collision>
+      <origin xyz="0 -0.02 -0.01" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.02 0.04 0.05"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="rr_hip_bracket_joint" type="fixed">
+    <parent link="rr_hip"/>
+    <child link="rr_hip_bracket"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- RR Shoulder Joint
+       - Servo: DS3218 (CH7)
+       - Function: Forward-backward upper leg swing
+       - Rotation axis: Y-axis
+       - Range: ±90° (±1.57 rad)
+       - Mounting: Inside hip U-bracket at -40mm Y-offset
+       - Bearings: 2× MR105ZZ
+  -->
   <link name="rr_upper_leg">
     <inertial>
       <origin xyz="0 0 -0.05" rpy="0 0 0"/>
@@ -423,6 +742,14 @@
     <limit lower="-1.57" upper="1.57" effort="10" velocity="5"/>
   </joint>
 
+  <!-- RR Knee Joint
+       - Servo: DS3218 (CH11)
+       - Function: Lower leg flexion/extension
+       - Rotation axis: Y-axis
+       - Range: -149° to -5.7° (-2.6 to -0.1 rad)
+       - Mounting: Upper leg base at -100mm Z-offset
+       - Bearings: 2× MR105ZZ
+  -->
   <link name="rr_lower_leg">
     <inertial>
       <origin xyz="0 0 -0.05" rpy="0 0 0"/>
@@ -450,6 +777,34 @@
     <origin xyz="0 0 -0.10" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
     <limit lower="-2.6" upper="-0.1" effort="10" velocity="5"/>
+  </joint>
+
+  <!-- RR Knee Bracket (U-bracket for knee servo mounting) -->
+  <link name="rr_knee_bracket">
+    <inertial>
+      <origin xyz="0 0 -0.01" rpy="0 0 0"/>
+      <mass value="0.03"/>
+      <inertia ixx="0.000003" ixy="0" ixz="0" iyy="0.000005" iyz="0" izz="0.000003"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 -0.01" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.015 0.03 0.04"/>
+      </geometry>
+      <material name="bracket_silver"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 -0.01" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.015 0.03 0.04"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="rr_knee_bracket_joint" type="fixed">
+    <parent link="rr_upper_leg"/>
+    <child link="rr_knee_bracket"/>
+    <origin xyz="0 0 -0.10" rpy="0 0 0"/>
   </joint>
 
   <link name="rr_foot">
