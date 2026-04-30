@@ -163,11 +163,25 @@ open cad/assembly_3d_view.html
 
 ---
 
-## 文档
+## 📚 文档导航（完整目录）
 
-- [v6 训练详细报告](docs/rl_v6_training_summary.md)
-- [硬件架构](docs/hardware_architecture.md)
-- [机械结构设计](docs/mechanical_design.md)
-- [腿部结构详细说明](docs/腿部结构详细说明.md)
-- [接线图](docs/wiring_diagram.md)
-- [可视化工具使用指南](docs/可视化工具使用指南.md)
+### 🔧 硬件设计与采购
+- [机械结构设计](docs/机械结构设计.md) — 结构尺寸、材料清单、组装步骤
+- [硬件架构](docs/硬件架构.md) — 电子元件配置、供电方案
+- [硬件对比与升级路线](docs/硬件对比.md) — 版本演进、配置差异
+- [四足恐龙采购清单](docs/四足恐龙_淘宝加购清单.html) — 完整购物清单、配件尺寸
+
+### 🦵 腿部结构与3D打印
+- [腿部结构详细说明](docs/腿部结构详细说明.md) — 关节配置、舵机位置、轴承支持
+- [3D打印件规格](docs/3D打印件规格_淘宝定制.md) — 打印参数、孔位、质量标准
+- [STL文件使用说明](cad/STL文件使用说明.md) — 供应商指南、修改说明
+
+### 🚀 软件与部署
+- [可视化工具指南](docs/可视化工具使用指南.md) — URDF/DXF/Three.js 查看方法
+- [RL v6 训练总结](docs/rl_v6_training_summary.md) — 训练结果、性能基准
+- [CHAMP 框架说明](docs/CHAMP框架.md) — 软件架构、环境配置
+- [接线图](docs/接线图.md) — 电路连接示意、信号定义
+- [硬件验证与集成](docs/硬件验证流程.md) — 点亮、校准、测试流程
+
+### 🎨 可视化
+- [Three.js 交互式组装图](cad/assembly_3d_threejs.html) — 实时交互预览，可控制舵机演示动画
