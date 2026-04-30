@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>恐龙四足机器人 - 专业 3D 可视化 (Three.js)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            overflow: hidden;
+        }
+
+        #container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        #info-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            max-width: 350px;
+            backdrop-filter: blur(10px);
+        }
+
+        #info-panel h1 {
+            color: #2c3e50;
+            font-size: 1.5em;
+            margin-bottom: 5px;
+        }
+
+        #info-panel .subtitle {
+            color: #7f8c8d;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+        }
+
+        .controls {
+            margin-top: 15px;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group h3 {
+            font-size: 0.85em;
+            color: #34495e;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        button {
+            padding: 8px 15px;
+            margin: 3px;
+            border: none;
+            border-radius: 5px;
+            background: #3498db;
+            color: white;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.3);
+        }
+
+        button.active {
+            background: #27ae60;
+        }
+
+        .stats {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 0.85em;
+            color: #2c3e50;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .stats div {
+            margin: 3px 0;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px 50px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            text-align: center;
+            font-size: 1.2em;
+            color: #2c3e50;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .legend {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+            font-size: 0.8em;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+            margin-right: 8px;
+            border: 1px solid #333;
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+
+    <div id="loading">
+        <div class="spinner"></div>
+        <div>加载 3D 场景...</div>
+    </div>
+
+    <div id="info-panel">
+        <h1>🦖 恐龙四足机器人</h1>
+        <p class="subtitle">专业 3D 可视化 (Three.js)</p>
+
+        <div class="controls">
+            <div class="control-group">
+                <h3>📐 视角预设</h3>
+                <button onclick="setView('default')">默认视角</button>
+                <button onclick="setView('top')">俯视图</button>
+                <button onclick="setView('side')">侧视图</button>
+                <button onclick="setView('front')">正视图</button>
+            </div>
+
+            <div class="control-group">
+                <h3>🎨 显示选项</h3>
+                <button id="btnGrid" class="active" onclick="toggleGrid()">网格</button>
+                <button id="btnAxes" class="active" onclick="toggleAxes()">坐标轴</button>
+                <button id="btnShadows" class="active" onclick="toggleShadows()">阴影</button>
+                <button id="btnWireframe" onclick="toggleWireframe()">线框</button>
+            </div>
+
+            <div class="control-group">
+                <h3>💡 光照</h3>
+                <button onclick="setLighting('bright')">明亮</button>
+                <button onclick="setLighting('normal')">标准</button>
+                <button onclick="setLighting('dark')">暗调</button>
+            </div>
+
+            <div class="control-group">
+                <h3>⚡ 动画</h3>
+                <button id="btnRotate" onclick="toggleAutoRotate()">自动旋转</button>
+                <button id="btnDemoRotation" onclick="toggleServoDemo()">舵机转动演示</button>
+                <button id="btnAxesLabels" class="active" onclick="toggleAxesLabels()">显示轴向</button>
+            </div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: #87CEEB;"></div>
+                <span>机身板 (亚克力)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #2C3E50;"></div>
+                <span>DS3218 舵机 (12个)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #C0C0C0;"></div>
+                <span>U型支架 (8个)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #228B22;"></div>
+                <span>树莓派 + 电子元件</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #FF8C00;"></div>
+                <span>锂电池 7.4V</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats">
+        <div><strong>控制说明:</strong></div>
+        <div>🖱️ 左键拖动: 旋转</div>
+        <div>🖱️ 右键拖动: 平移</div>
+        <div>🖱️ 滚轮: 缩放</div>
+        <div style="margin-top: 10px;"><strong>器件数量:</strong></div>
+        <div>• 舵机: 12 个</div>
+        <div>• U型支架: 8 个</div>
+        <div>• 总重: ~1.5 kg</div>
+    </div>
+
+    <!-- Three.js 库 (通过 CDN 加载) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        // 全局变量
+        let scene, camera, renderer, controls;
+        let gridHelper, axesHelper;
+        let components = { body: [], servos: [], brackets: [], electronics: [], legs: [] };
+        let legJoints = []; // 存储关节组：{type: 'hip'|'shoulder'|'knee', group: THREE.Group}
+        let lights = {};
+        let isExploded = false;
+        let originalPositions = new Map();
+        let servoDemo = false;
+        let demoTime = 0;
+        let axesLabelsVisible = true;
+        let axesLabelsGroup = new THREE.Group();
+
+        // 初始化场景
+        function init() {
+            // 场景
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf0f0f0);
+            scene.fog = new THREE.Fog(0xf0f0f0, 500, 2000);
+
+            // 相机
+            const container = document.getElementById('container');
+            camera = new THREE.PerspectiveCamera(
+                50,
+                window.innerWidth / window.innerHeight,
+                1,
+                2000
+            );
+            camera.position.set(400, 300, 400);
+            camera.lookAt(0, 0, 0);
+
+            // 渲染器
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // 控制器
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 100;
+            controls.maxDistance = 1000;
+            controls.maxPolarAngle = Math.PI / 2;
+
+            // 光照
+            const ambientLight = new THREE.AmbientLight(0x606060);
+            scene.add(ambientLight);
+            lights.ambient = ambientLight;
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+            directionalLight.position.set(200, 300, 200);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.camera.left = -300;
+            directionalLight.shadow.camera.right = 300;
+            directionalLight.shadow.camera.top = 300;
+            directionalLight.shadow.camera.bottom = -300;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
+            lights.directional = directionalLight;
+
+            const hemisphereLight = new THREE.HemisphereLight(0xffffbb, 0x080820, 0.4);
+            scene.add(hemisphereLight);
+            lights.hemisphere = hemisphereLight;
+
+            // 地面
+            const groundGeometry = new THREE.PlaneGeometry(1000, 1000);
+            const groundMaterial = new THREE.MeshLambertMaterial({
+                color: 0xcccccc,
+                side: THREE.DoubleSide
+            });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.y = -200;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // 网格
+            gridHelper = new THREE.GridHelper(1000, 50, 0x888888, 0xdddddd);
+            gridHelper.position.y = -200;
+            scene.add(gridHelper);
+
+            // 坐标轴
+            axesHelper = new THREE.AxesHelper(150);
+            scene.add(axesHelper);
+
+            // 创建机器人
+            createRobot();
+
+            // 添加轴向标注
+            // 髋关节轴（X 轴）
+            createAxisArrow([70, 21, 45], [1, 0, 0], 30, 0xFF0000, 'X轴');
+            createAxisArrow([-70, 21, 45], [1, 0, 0], 30, 0xFF0000, 'X轴');
+
+            // 肩关节轴（Y 轴）
+            createAxisArrow([70, -22, 75], [0, 1, 0], 30, 0x00FF00, 'Y轴');
+            createAxisArrow([-70, -22, 75], [0, 1, 0], 30, 0x00FF00, 'Y轴');
+
+            // 膝关节轴（Y 轴）
+            createAxisArrow([70, -97, 75], [0, 1, 0], 30, 0x00FF00, 'Y轴');
+            createAxisArrow([-70, -97, 75], [0, 1, 0], 30, 0x00FF00, 'Y轴');
+
+            scene.add(axesLabelsGroup);
+
+            // 窗口调整
+            window.addEventListener('resize', onWindowResize);
+
+            // 隐藏加载界面
+            document.getElementById('loading').style.display = 'none';
+
+            // 开始动画
+            animate();
+        }
+
+        // 创建长方体辅助函数
+        function createBox(width, height, depth, color, position, rotation = [0, 0, 0]) {
+            const geometry = new THREE.BoxGeometry(width, height, depth);
+            const material = new THREE.MeshPhongMaterial({
+                color: color,
+                transparent: color === 0x87CEEB || color === 0xC0C0C0,
+                opacity: color === 0x87CEEB ? 0.6 : (color === 0xC0C0C0 ? 0.7 : 1),
+                shininess: 30
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(position[0], position[1], position[2]);
+            mesh.rotation.set(rotation[0], rotation[1], rotation[2]);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+
+            // 添加边缘线
+            const edges = new THREE.EdgesGeometry(geometry);
+            const line = new THREE.LineSegments(
+                edges,
+                new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 1 })
+            );
+            mesh.add(line);
+
+            return mesh;
+        }
+
+        // 创建旋转轴标注
+        function createAxisArrow(origin, direction, length, color, label) {
+            // 箭头
+            const arrowHelper = new THREE.ArrowHelper(
+                new THREE.Vector3(...direction).normalize(),
+                new THREE.Vector3(...origin),
+                length,
+                color,
+                length * 0.35,
+                length * 0.25
+            );
+            axesLabelsGroup.add(arrowHelper);
+
+            // 创建旋转弧（圆形箭头表示旋转方向）
+            const arcGeometry = new THREE.BufferGeometry();
+            const arcPoints = [];
+            const radius = 40;
+            const arcLength = Math.PI * 0.6; // 120 度
+
+            // 根据轴向创建旋转弧
+            if (direction[0] === 1) { // X 轴
+                for (let i = 0; i <= 20; i++) {
+                    const angle = -arcLength / 2 + (arcLength / 20) * i;
+                    arcPoints.push(
+                        origin[0],
+                        origin[1] + Math.cos(angle) * radius,
+                        origin[2] + Math.sin(angle) * radius
+                    );
+                }
+            } else if (direction[1] === 1) { // Y 轴
+                for (let i = 0; i <= 20; i++) {
+                    const angle = -arcLength / 2 + (arcLength / 20) * i;
+                    arcPoints.push(
+                        origin[0] + Math.cos(angle) * radius,
+                        origin[1],
+                        origin[2] + Math.sin(angle) * radius
+                    );
+                }
+            }
+
+            arcGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(arcPoints), 3));
+            const arcLine = new THREE.Line(arcGeometry, new THREE.LineBasicMaterial({ color: color, linewidth: 2 }));
+            axesLabelsGroup.add(arcLine);
+
+            // 标签
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
+            ctx.font = 'Bold 16px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, 32, 32);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
+            const geometry = new THREE.PlaneGeometry(20, 20);
+            const labelMesh = new THREE.Mesh(geometry, material);
+
+            const endPos = new THREE.Vector3(...origin).add(
+                new THREE.Vector3(...direction).normalize().multiplyScalar(length + 20)
+            );
+            labelMesh.position.copy(endPos);
+            axesLabelsGroup.add(labelMesh);
+        }
+
+        // 创建圆柱体辅助函数
+        function createCylinder(radius, height, color, position) {
+            const geometry = new THREE.CylinderGeometry(radius, radius, height, 32);
+            const material = new THREE.MeshPhongMaterial({ color: color, shininess: 50 });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(position[0], position[1], position[2]);
+            mesh.rotation.set(0, 0, 0);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            return mesh;
+        }
+
+        // 创建机器人
+        function createRobot() {
+            // 机身板
+            const bottomPlate = createBox(200, 3, 110, 0x87CEEB, [0, 0, 0]);
+            components.body.push(bottomPlate);
+            scene.add(bottomPlate);
+
+            const topPlate = createBox(200, 3, 110, 0x87CEEB, [0, 30, 0]);
+            components.body.push(topPlate);
+            scene.add(topPlate);
+
+            // 铜柱（8个）
+            const standoffPositions = [
+                [-90, 15, -45], [-90, 15, 0], [-90, 15, 45],
+                [0, 15, -45], [0, 15, 45],
+                [80, 15, -45], [80, 15, 0], [80, 15, 45]
+            ];
+            standoffPositions.forEach(pos => {
+                const standoff = createCylinder(3, 30, 0xFFD700, pos);
+                components.body.push(standoff);
+                scene.add(standoff);
+            });
+
+            // 电子元件
+            const rpi = createBox(85.6, 17, 56, 0x228B22, [-40, 41.5, 10]);
+            components.electronics.push(rpi);
+            scene.add(rpi);
+
+            const pca = createBox(61, 8, 25, 0x0000FF, [-40, 37, -30]);
+            components.electronics.push(pca);
+            scene.add(pca);
+
+            const mpu = createBox(20, 3, 15, 0x800080, [5, 34.5, 0]);
+            components.electronics.push(mpu);
+            scene.add(mpu);
+
+            const lm1 = createBox(37, 14, 15, 0xFF0000, [50, 40, 35]);
+            components.electronics.push(lm1);
+            scene.add(lm1);
+
+            const lm2 = createBox(37, 14, 15, 0xFF0000, [50, 40, 8]);
+            components.electronics.push(lm2);
+            scene.add(lm2);
+
+            const battery = createBox(70, 30, 50, 0xFF8C00, [50, 48, -25]);
+            components.electronics.push(battery);
+            scene.add(battery);
+
+            // 髋关节舵机（4个，底板固定）
+            // 髋关节绕 X 轴旋转，所以舵机长轴应该沿 Y 轴（竖立）
+            const hipServos = [
+                { pos: [70, 21, 45], label: '左前髋' },
+                { pos: [70, 21, -45], label: '右前髋' },
+                { pos: [-70, 21, 45], label: '左后髋' },
+                { pos: [-70, 21, -45], label: '右后髋' }
+            ];
+
+            hipServos.forEach(({pos, label}) => {
+                // 髋关节：长轴沿 Y 轴 (X=20.2, Y=36.2, Z=40.7)
+                const servo = createBox(20.2, 36.2, 40.7, 0x2C3E50, pos);
+                components.servos.push(servo);
+                scene.add(servo);
+
+                // 舵机轴在 X 轴方向（绕 X 轴转）
+                const axisLeft = createCylinder(3, 6, 0xFFFFFF, [pos[0] - 12, pos[1], pos[2]]);
+                const axisRight = createCylinder(3, 6, 0xFFFFFF, [pos[0] + 12, pos[1], pos[2]]);
+                components.servos.push(axisLeft, axisRight);
+                scene.add(axisLeft, axisRight);
+            });
+
+            // 创建一条完整的腿（左前腿作为示例）
+            createLeg(70, 75, '左前', 1);
+            // 其他三条腿（简化）
+            createSimpleLeg(70, -75, '右前');
+            createSimpleLeg(-70, 75, '左后');
+            createSimpleLeg(-70, -75, '右后');
+        }
+
+        // 创建完整的腿（带层级结构）
+        function createLeg(baseX, baseY, prefix, channelBase) {
+            // === 髋关节组（从底板连接点开始，包含整条腿） ===
+            const hipGroup = new THREE.Group();
+            hipGroup.position.set(baseX, 21, baseY); // 髋关节舵机中心位置
+            scene.add(hipGroup);
+            legJoints.push({ type: 'hip', group: hipGroup, axis: 'x', legName: prefix });
+
+            // 髋关节舵机（固定，不转动）
+            const hipServo = createBox(20.2, 36.2, 40.7, 0x2C3E50, [0, 0, 0]);
+            components.servos.push(hipServo);
+            hipGroup.add(hipServo);
+
+            // 髋关节输出轴
+            const hipAxisL = createCylinder(3, 6, 0xFFFFFF, [-12, 0, 0]);
+            const hipAxisR = createCylinder(3, 6, 0xFFFFFF, [12, 0, 0]);
+            hipGroup.add(hipAxisL, hipAxisR);
+
+            // === 肩关节组（连接到髋关节输出，包含上腿和下级） ===
+            const shoulderGroup = new THREE.Group();
+            shoulderGroup.position.set(0, -43, 0); // 相对髋关节的位置（向下43mm）
+            hipGroup.add(shoulderGroup);
+            legJoints.push({ type: 'shoulder', group: shoulderGroup, axis: 'z', legName: prefix });
+
+            // 肩关节 U型支架
+            const bracket1Left = createBox(3, 50, 20, 0xC0C0C0, [-21, 0, 0]);
+            const bracket1Right = createBox(3, 50, 20, 0xC0C0C0, [21, 0, 0]);
+            components.brackets.push(bracket1Left, bracket1Right);
+            shoulderGroup.add(bracket1Left, bracket1Right);
+
+            // 肩关节舵机（固定在U型支架上，不转动）
+            const shoulderServo = createBox(36.2, 20.2, 40.7, 0x2C3E50, [0, 0, 0]);
+            components.servos.push(shoulderServo);
+            shoulderGroup.add(shoulderServo);
+
+            // 上腿杆（连接到肩关节输出）
+            const upperLeg = createBox(10, 100, 10, 0x90EE90, [0, -25, 0]);
+            components.legs.push(upperLeg);
+            shoulderGroup.add(upperLeg);
+
+            // === 膝关节组（连接到上腿末端，包含下腿） ===
+            const kneeGroup = new THREE.Group();
+            kneeGroup.position.set(0, -75, 0); // 相对肩关节的位置（上腿长度+膝关节偏移）
+            shoulderGroup.add(kneeGroup);
+            legJoints.push({ type: 'knee', group: kneeGroup, axis: 'z', legName: prefix });
+
+            // 膝关节 U型支架
+            const bracket2Left = createBox(3, 50, 20, 0xC0C0C0, [-21, 0, 0]);
+            const bracket2Right = createBox(3, 50, 20, 0xC0C0C0, [21, 0, 0]);
+            components.brackets.push(bracket2Left, bracket2Right);
+            kneeGroup.add(bracket2Left, bracket2Right);
+
+            // 膝关节舵机（固定在U型支架上，不转动）
+            const kneeServo = createBox(36.2, 20.2, 40.7, 0x2C3E50, [0, 0, 0]);
+            components.servos.push(kneeServo);
+            kneeGroup.add(kneeServo);
+
+            // 下腿杆（连接到膝关节输出）
+            const lowerLeg = createBox(8, 100, 8, 0x228B22, [0, -50, 0]);
+            components.legs.push(lowerLeg);
+            kneeGroup.add(lowerLeg);
+
+            // 足端球体
+            const footGeometry = new THREE.SphereGeometry(7, 32, 32);
+            const footMaterial = new THREE.MeshPhongMaterial({ color: 0xFF8C00 });
+            const foot = new THREE.Mesh(footGeometry, footMaterial);
+            foot.position.set(0, -100, 0);
+            foot.castShadow = true;
+            components.legs.push(foot);
+            kneeGroup.add(foot);
+        }
+
+        // 创建简化的腿（同样使用层级结构）
+        function createSimpleLeg(baseX, baseY, prefix) {
+            // === 髋关节组 ===
+            const hipGroup = new THREE.Group();
+            hipGroup.position.set(baseX, 21, baseY);
+            scene.add(hipGroup);
+            legJoints.push({ type: 'hip', group: hipGroup, axis: 'x', legName: prefix });
+
+            const hipServo = createBox(20.2, 36.2, 40.7, 0x2C3E50, [0, 0, 0]);
+            components.servos.push(hipServo);
+            hipGroup.add(hipServo);
+
+            const hipAxisL = createCylinder(3, 6, 0xFFFFFF, [-12, 0, 0]);
+            const hipAxisR = createCylinder(3, 6, 0xFFFFFF, [12, 0, 0]);
+            hipGroup.add(hipAxisL, hipAxisR);
+
+            // === 肩关节组 ===
+            const shoulderGroup = new THREE.Group();
+            shoulderGroup.position.set(0, -43, 0);
+            hipGroup.add(shoulderGroup);
+            legJoints.push({ type: 'shoulder', group: shoulderGroup, axis: 'z', legName: prefix });
+
+            const shoulderServo = createBox(36.2, 20.2, 40.7, 0x2C3E50, [0, 0, 0]);
+            components.servos.push(shoulderServo);
+            shoulderGroup.add(shoulderServo);
+
+            const upperLeg = createBox(10, 100, 10, 0x90EE90, [0, -25, 0]);
+            components.legs.push(upperLeg);
+            shoulderGroup.add(upperLeg);
+
+            // === 膝关节组 ===
+            const kneeGroup = new THREE.Group();
+            kneeGroup.position.set(0, -75, 0);
+            shoulderGroup.add(kneeGroup);
+            legJoints.push({ type: 'knee', group: kneeGroup, axis: 'z', legName: prefix });
+
+            const kneeServo = createBox(36.2, 20.2, 40.7, 0x2C3E50, [0, 0, 0]);
+            components.servos.push(kneeServo);
+            kneeGroup.add(kneeServo);
+
+            const lowerLeg = createBox(8, 100, 8, 0x228B22, [0, -50, 0]);
+            components.legs.push(lowerLeg);
+            kneeGroup.add(lowerLeg);
+
+            const footGeometry = new THREE.SphereGeometry(7, 32, 32);
+            const footMaterial = new THREE.MeshPhongMaterial({ color: 0xFF8C00 });
+            const foot = new THREE.Mesh(footGeometry, footMaterial);
+            foot.position.set(0, -100, 0);
+            foot.castShadow = true;
+            components.legs.push(foot);
+            kneeGroup.add(foot);
+        }
+
+        // 动画循环
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+
+            // 舵机演示动画（对角步态 Trot）
+            if (servoDemo) {
+                demoTime += 0.01;
+                const t = (demoTime % 4) / 4; // 0-1 的周期
+
+                // 定义四条腿的索引（每条腿3个关节：hip, shoulder, knee）
+                // FL=左前[0,1,2], FR=右前[3,4,5], RL=左后[6,7,8], RR=右后[9,10,11]
+                const legIndices = {
+                    FL: [0, 1, 2],   // 左前
+                    FR: [3, 4, 5],   // 右前
+                    RL: [6, 7, 8],   // 左后
+                    RR: [9, 10, 11]  // 右后
+                };
+
+                // 对角步态：FL+RR 一组，FR+RL 一组
+                function getLegPhase(legName) {
+                    if (legName === 'FL' || legName === 'RR') {
+                        return t; // 第一组
+                    } else {
+                        return (t + 0.5) % 1; // 第二组，相位差 180°
+                    }
+                }
+
+                // 为每条腿计算关节角度
+                Object.keys(legIndices).forEach(legName => {
+                    const [hipIdx, shoulderIdx, kneeIdx] = legIndices[legName];
+                    const phase = getLegPhase(legName);
+
+                    // 步态周期：0-0.5 抬腿摆动，0.5-1.0 落腿支撑
+                    let hipAngle, shoulderAngle, kneeAngle;
+
+                    if (phase < 0.5) {
+                        // 抬腿摆动阶段（Swing phase）
+                        const p = phase * 2; // 0-1
+
+                        // 髋关节：保持接近0
+                        hipAngle = 0;
+
+                        // 肩关节：向前抬起（正角度=向前抬）
+                        shoulderAngle = 0.9 * Math.sin(p * Math.PI); // 从 0 抬到 0.9 再到 0
+
+                        // 膝关节：配合抬腿时弯曲（负角度=向后弯）
+                        kneeAngle = -1.2 * Math.sin(p * Math.PI); // 从 0 弯到 -1.2 再到 0
+                    } else {
+                        // 落腿支撑阶段（Stance phase）
+                        const p = (phase - 0.5) * 2; // 0-1
+
+                        // 髋关节：保持稳定
+                        hipAngle = 0;
+
+                        // 肩关节：向后伸展推进（负角度=向后）
+                        shoulderAngle = -0.5 * p; // 从 0 到 -0.5
+
+                        // 膝关节：轻微弯曲支撑
+                        kneeAngle = -0.2 - 0.3 * p; // 从 -0.2 到 -0.5
+                    }
+
+                    // 应用到对应的关节组
+                    if (legJoints[hipIdx]) legJoints[hipIdx].group.rotation.x = hipAngle;
+
+                    // 肩关节和膝关节：绕 Z 轴旋转（前后摆动）
+                    // 左右侧需要反向旋转以保持对称
+                    const isLeft = (legName === 'FL' || legName === 'RL');
+                    const direction = isLeft ? 1 : -1;
+
+                    if (legJoints[shoulderIdx]) legJoints[shoulderIdx].group.rotation.z = shoulderAngle * direction;
+                    if (legJoints[kneeIdx]) legJoints[kneeIdx].group.rotation.z = kneeAngle * direction;
+                });
+            }
+
+            // 标签始终面向摄像机
+            axesLabelsGroup.children.forEach(child => {
+                if (child instanceof THREE.Mesh && child.lookAt) {
+                    child.lookAt(camera.position);
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        // 窗口调整
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // 视角预设
+        function setView(view) {
+            switch(view) {
+                case 'default':
+                    camera.position.set(400, 300, 400);
+                    break;
+                case 'top':
+                    camera.position.set(0, 500, 0);
+                    break;
+                case 'side':
+                    camera.position.set(500, 0, 0);
+                    break;
+                case 'front':
+                    camera.position.set(0, 0, 500);
+                    break;
+            }
+            camera.lookAt(0, 0, 0);
+            controls.update();
+        }
+
+        // 切换功能
+        function toggleGrid() {
+            gridHelper.visible = !gridHelper.visible;
+            document.getElementById('btnGrid').classList.toggle('active');
+        }
+
+        function toggleAxes() {
+            axesHelper.visible = !axesHelper.visible;
+            document.getElementById('btnAxes').classList.toggle('active');
+        }
+
+        function toggleShadows() {
+            renderer.shadowMap.enabled = !renderer.shadowMap.enabled;
+            document.getElementById('btnShadows').classList.toggle('active');
+        }
+
+        function toggleWireframe() {
+            scene.traverse((object) => {
+                if (object.material) {
+                    object.material.wireframe = !object.material.wireframe;
+                }
+            });
+            document.getElementById('btnWireframe').classList.toggle('active');
+        }
+
+        function setLighting(mode) {
+            switch(mode) {
+                case 'bright':
+                    lights.ambient.intensity = 0.8;
+                    lights.directional.intensity = 0.9;
+                    lights.hemisphere.intensity = 0.6;
+                    break;
+                case 'normal':
+                    lights.ambient.intensity = 0.6;
+                    lights.directional.intensity = 0.6;
+                    lights.hemisphere.intensity = 0.4;
+                    break;
+                case 'dark':
+                    lights.ambient.intensity = 0.3;
+                    lights.directional.intensity = 0.4;
+                    lights.hemisphere.intensity = 0.2;
+                    break;
+            }
+        }
+
+        function toggleAutoRotate() {
+            controls.autoRotate = !controls.autoRotate;
+            document.getElementById('btnRotate').classList.toggle('active');
+        }
+
+        function toggleServoDemo() {
+            servoDemo = !servoDemo;
+            demoTime = 0;
+            document.getElementById('btnDemoRotation').classList.toggle('active');
+            if (servoDemo) {
+                controls.autoRotate = false;
+                document.getElementById('btnRotate').classList.remove('active');
+            }
+        }
+
+        function toggleAxesLabels() {
+            axesLabelsVisible = !axesLabelsVisible;
+            axesLabelsGroup.visible = axesLabelsVisible;
+            document.getElementById('btnAxesLabels').classList.toggle('active');
+        }
+
+        function explodeView() {
+            alert('爆炸视图功能：将各部件沿法线方向移开\n（完整实现需要记录原始位置并计算移动向量）');
+        }
+
+        function resetPositions() {
+            setView('default');
+            controls.autoRotate = false;
+            servoDemo = false;
+            document.getElementById('btnRotate').classList.remove('active');
+            document.getElementById('btnDemoRotation').classList.remove('active');
+            // 重置关节组旋转
+            legJoints.forEach(joint => {
+                joint.group.rotation.x = 0;
+                joint.group.rotation.y = 0;
+                joint.group.rotation.z = 0;
+            });
+        }
+
+        // 启动
+        init();
+    </script>
+</body>
+</html>

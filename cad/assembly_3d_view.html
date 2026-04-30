@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>恐龙四足机器人 - 3D 组装视图</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 30px;
+            max-width: 1400px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            height: 700px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 2px solid #e0e0e0;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .control-group {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .control-group h3 {
+            font-size: 0.9em;
+            color: #34495e;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: none;
+            border-radius: 5px;
+            background: #3498db;
+            color: white;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.3);
+        }
+
+        button.active {
+            background: #27ae60;
+        }
+
+        .info-panel {
+            margin-top: 20px;
+            background: #ecf0f1;
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .info-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #3498db;
+        }
+
+        .info-item h4 {
+            color: #2c3e50;
+            margin-bottom: 8px;
+            font-size: 1em;
+        }
+
+        .info-item p {
+            color: #7f8c8d;
+            font-size: 0.9em;
+            line-height: 1.6;
+        }
+
+        .legend {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-color {
+            width: 30px;
+            height: 30px;
+            border-radius: 5px;
+            border: 2px solid #34495e;
+        }
+
+        .legend-text {
+            font-size: 0.9em;
+            color: #2c3e50;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🦖 恐龙四足机器人</h1>
+        <p class="subtitle">基于真实采购器件的 3D 组装可视化</p>
+
+        <div class="canvas-container">
+            <canvas id="canvas3d"></canvas>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <h3>📐 视角控制</h3>
+                <button onclick="resetView()">重置视角</button>
+                <button onclick="viewTop()">俯视图</button>
+                <button onclick="viewSide()">侧视图</button>
+                <button onclick="viewFront()">正视图</button>
+            </div>
+
+            <div class="control-group">
+                <h3>🔍 显示选项</h3>
+                <button id="btnBody" class="active" onclick="toggleLayer('body')">机身板</button>
+                <button id="btnServos" class="active" onclick="toggleLayer('servos')">舵机 (12个)</button>
+                <button id="btnElectronics" class="active" onclick="toggleLayer('electronics')">电子元件</button>
+                <button id="btnLegs" class="active" onclick="toggleLayer('legs')">腿部结构</button>
+            </div>
+
+            <div class="control-group">
+                <h3>🎨 渲染模式</h3>
+                <button onclick="setRenderMode('solid')">实体模式</button>
+                <button onclick="setRenderMode('wireframe')">线框模式</button>
+                <button onclick="setRenderMode('xray')">透视模式</button>
+            </div>
+
+            <div class="control-group">
+                <h3>⚡ 动画</h3>
+                <button onclick="toggleRotation()">自动旋转</button>
+                <button onclick="playWalkAnimation()">行走动画</button>
+                <button onclick="explodeView()">爆炸视图</button>
+            </div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: rgba(135, 206, 250, 0.6);"></div>
+                <span class="legend-text">机身板 (200×110mm)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: rgba(44, 62, 80, 0.8);"></div>
+                <span class="legend-text">DS3218 舵机 (12个)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: rgba(192, 192, 192, 0.6);"></div>
+                <span class="legend-text">U型支架 (8个)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: rgba(0, 128, 0, 0.8);"></div>
+                <span class="legend-text">树莓派 3B</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: rgba(0, 0, 255, 0.8);"></div>
+                <span class="legend-text">PCA9685</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: rgba(255, 140, 0, 0.7);"></div>
+                <span class="legend-text">锂电池</span>
+            </div>
+        </div>
+
+        <div class="info-panel">
+            <h3 style="margin-bottom: 15px; color: #2c3e50;">📋 技术规格</h3>
+            <div class="info-grid">
+                <div class="info-item">
+                    <h4>🔧 执行器</h4>
+                    <p><strong>12 × DS3218 舵机</strong><br>
+                    扭矩: 21 kg·cm<br>
+                    转角: 270°<br>
+                    尺寸: 40.7×20.2×36.2 mm</p>
+                </div>
+                <div class="info-item">
+                    <h4>🦾 U型支架</h4>
+                    <p><strong>8 个铝合金支架</strong><br>
+                    肩关节: 4 个<br>
+                    膝关节: 4 个<br>
+                    髋关节: 直接固定（无需支架）</p>
+                </div>
+                <div class="info-item">
+                    <h4>💻 主控系统</h4>
+                    <p><strong>树莓派 3B</strong><br>
+                    尺寸: 85.6×56 mm<br>
+                    <strong>PCA9685</strong> 舵机驱动<br>
+                    <strong>MPU6050</strong> IMU 传感器</p>
+                </div>
+                <div class="info-item">
+                    <h4>⚡ 电源系统</h4>
+                    <p><strong>2S 锂电池 7.4V 5Ah</strong><br>
+                    LM2596 #1: 5V (树莓派)<br>
+                    LM2596 #2: 6V (舵机)<br>
+                    续航: 1-2.5 小时</p>
+                </div>
+                <div class="info-item">
+                    <h4>📏 机械尺寸</h4>
+                    <p>机身: 200×110×60 mm<br>
+                    站立高度: ~250 mm<br>
+                    腿长: 200 mm (上腿+下腿)<br>
+                    总重: ~1.5 kg</p>
+                </div>
+                <div class="info-item">
+                    <h4>🎯 自由度</h4>
+                    <p><strong>12 DOF</strong><br>
+                    每腿 3 个关节:<br>
+                    • 髋关节 (Hip Yaw)<br>
+                    • 肩关节 (Shoulder Pitch)<br>
+                    • 膝关节 (Knee Pitch)</p>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 30px; text-align: center; color: #7f8c8d; font-size: 0.9em;">
+            <p>💡 提示: 拖动鼠标旋转视角 | 滚轮缩放 | 右键平移</p>
+            <p style="margin-top: 10px;">📁 组装图生成时间: 2026-04-28</p>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas3d');
+        const ctx = canvas.getContext('2d');
+
+        // 设置 canvas 尺寸
+        function resizeCanvas() {
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // 3D 相机参数
+        let camera = {
+            x: 0, y: 0, z: 400,
+            rotX: 0.3, rotY: 0.5, rotZ: 0,
+            zoom: 1.5
+        };
+
+        let isRotating = false;
+        let lastMouse = { x: 0, y: 0 };
+
+        // 显示层控制
+        let layers = {
+            body: true,
+            servos: true,
+            electronics: true,
+            legs: true
+        };
+
+        // 3D 投影函数
+        function project(x, y, z) {
+            // 旋转
+            let x1 = x * Math.cos(camera.rotY) - z * Math.sin(camera.rotY);
+            let z1 = x * Math.sin(camera.rotY) + z * Math.cos(camera.rotY);
+
+            let y1 = y * Math.cos(camera.rotX) - z1 * Math.sin(camera.rotX);
+            let z2 = y * Math.sin(camera.rotX) + z1 * Math.cos(camera.rotX);
+
+            // 透视投影
+            let scale = camera.zoom * 200 / (200 + z2 + camera.z);
+            return {
+                x: canvas.width / 2 + x1 * scale,
+                y: canvas.height / 2 - y1 * scale,
+                z: z2
+            };
+        }
+
+        // 绘制长方体
+        function drawBox(cx, cy, cz, w, h, d, color, label) {
+            const vertices = [
+                project(cx - w/2, cy - h/2, cz - d/2),
+                project(cx + w/2, cy - h/2, cz - d/2),
+                project(cx + w/2, cy + h/2, cz - d/2),
+                project(cx - w/2, cy + h/2, cz - d/2),
+                project(cx - w/2, cy - h/2, cz + d/2),
+                project(cx + w/2, cy - h/2, cz + d/2),
+                project(cx + w/2, cy + h/2, cz + d/2),
+                project(cx - w/2, cy + h/2, cz + d/2),
+            ];
+
+            const faces = [
+                [0, 1, 2, 3], // 前
+                [4, 5, 6, 7], // 后
+                [0, 1, 5, 4], // 底
+                [2, 3, 7, 6], // 顶
+                [0, 3, 7, 4], // 左
+                [1, 2, 6, 5], // 右
+            ];
+
+            // 计算面的平均 Z 值用于排序
+            const facesWithZ = faces.map(face => ({
+                face: face,
+                avgZ: face.reduce((sum, i) => sum + vertices[i].z, 0) / face.length
+            }));
+
+            facesWithZ.sort((a, b) => a.avgZ - b.avgZ);
+
+            // 绘制面
+            facesWithZ.forEach(({ face }) => {
+                ctx.beginPath();
+                ctx.moveTo(vertices[face[0]].x, vertices[face[0]].y);
+                face.forEach(i => ctx.lineTo(vertices[i].x, vertices[i].y));
+                ctx.closePath();
+
+                ctx.fillStyle = color;
+                ctx.fill();
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 0.5;
+                ctx.stroke();
+            });
+
+            // 标签
+            if (label) {
+                const center = project(cx, cy, cz + d/2 + 5);
+                ctx.fillStyle = '#000';
+                ctx.font = '11px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(label, center.x, center.y);
+            }
+        }
+
+        // 主渲染函数
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 背景渐变
+            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, '#e8f4f8');
+            grad.addColorStop(1, '#ffffff');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 机身板
+            if (layers.body) {
+                drawBox(0, 0, 0, 200, 110, 3, 'rgba(135, 206, 250, 0.6)', '底板');
+                drawBox(0, 0, 30, 200, 110, 3, 'rgba(135, 206, 250, 0.6)', '顶板');
+            }
+
+            // 电子元件
+            if (layers.electronics) {
+                drawBox(-40, 10, 41, 85.6, 56, 17, 'rgba(0, 128, 0, 0.8)', '树莓派 3B');
+                drawBox(-40, -30, 37, 61, 25, 8, 'rgba(0, 0, 255, 0.8)', 'PCA9685');
+                drawBox(5, 0, 34.5, 20, 15, 3, 'rgba(128, 0, 128, 0.8)', 'MPU6050');
+                drawBox(50, 35, 40, 37, 15, 14, 'rgba(255, 0, 0, 0.8)', 'LM2596 #1');
+                drawBox(50, 8, 40, 37, 15, 14, 'rgba(255, 0, 0, 0.8)', 'LM2596 #2');
+                drawBox(50, -25, 48, 70, 50, 30, 'rgba(255, 140, 0, 0.7)', '2S 电池');
+            }
+
+            // 舵机
+            if (layers.servos) {
+                // 髋关节舵机（4个）
+                drawBox(70, 45, 21, 40.7, 20.2, 36.2, 'rgba(44, 62, 80, 0.8)', '左前髋');
+                drawBox(70, -45, 21, 40.7, 20.2, 36.2, 'rgba(44, 62, 80, 0.8)', '右前髋');
+                drawBox(-70, 45, 21, 40.7, 20.2, 36.2, 'rgba(44, 62, 80, 0.8)', '左后髋');
+                drawBox(-70, -45, 21, 40.7, 20.2, 36.2, 'rgba(44, 62, 80, 0.8)', '右后髋');
+
+                // 腿部舵机（简化显示）
+                if (layers.legs) {
+                    // 左前腿
+                    drawBox(70, 75, -22, 42, 3, 50, 'rgba(192, 192, 192, 0.6)', 'U型支架');
+                    drawBox(70, 75, -22, 40.7, 20.2, 36.2, 'rgba(44, 62, 80, 0.8)', '左前肩');
+                    drawBox(70, 75, -47, 10, 10, 100, 'rgba(144, 238, 144, 0.6)', '');
+                    drawBox(70, 75, -97, 42, 3, 50, 'rgba(192, 192, 192, 0.6)', '');
+                    drawBox(70, 75, -97, 40.7, 20.2, 36.2, 'rgba(44, 62, 80, 0.8)', '左前膝');
+                    drawBox(70, 75, -147, 8, 8, 100, 'rgba(34, 139, 34, 0.6)', '');
+
+                    // 右前腿（简化）
+                    drawBox(70, -75, -97, 40.7, 20.2, 36.2, 'rgba(44, 62, 80, 0.6)', '');
+                    drawBox(70, -75, -147, 8, 8, 100, 'rgba(34, 139, 34, 0.4)', '');
+
+                    // 左后腿（简化）
+                    drawBox(-70, 75, -97, 40.7, 20.2, 36.2, 'rgba(44, 62, 80, 0.6)', '');
+                    drawBox(-70, 75, -147, 8, 8, 100, 'rgba(34, 139, 34, 0.4)', '');
+
+                    // 右后腿（简化）
+                    drawBox(-70, -75, -97, 40.7, 20.2, 36.2, 'rgba(44, 62, 80, 0.6)', '');
+                    drawBox(-70, -75, -147, 8, 8, 100, 'rgba(34, 139, 34, 0.4)', '');
+                }
+            }
+
+            // 添加坐标轴
+            const axisLen = 80;
+            const origin = project(0, 0, 0);
+
+            ctx.strokeStyle = '#FF0000';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(origin.x, origin.y);
+            const xAxis = project(axisLen, 0, 0);
+            ctx.lineTo(xAxis.x, xAxis.y);
+            ctx.stroke();
+            ctx.fillStyle = '#FF0000';
+            ctx.fillText('X (前)', xAxis.x, xAxis.y);
+
+            ctx.strokeStyle = '#00FF00';
+            ctx.beginPath();
+            ctx.moveTo(origin.x, origin.y);
+            const yAxis = project(0, axisLen, 0);
+            ctx.lineTo(yAxis.x, yAxis.y);
+            ctx.stroke();
+            ctx.fillStyle = '#00FF00';
+            ctx.fillText('Y (左)', yAxis.x, yAxis.y);
+
+            ctx.strokeStyle = '#0000FF';
+            ctx.beginPath();
+            ctx.moveTo(origin.x, origin.y);
+            const zAxis = project(0, 0, axisLen);
+            ctx.lineTo(zAxis.x, zAxis.y);
+            ctx.stroke();
+            ctx.fillStyle = '#0000FF';
+            ctx.fillText('Z (上)', zAxis.x, zAxis.y);
+
+            if (isRotating) {
+                camera.rotY += 0.01;
+                requestAnimationFrame(render);
+            }
+        }
+
+        // 鼠标交互
+        canvas.addEventListener('mousedown', (e) => {
+            lastMouse = { x: e.clientX, y: e.clientY };
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (e.buttons === 1) { // 左键拖动
+                const dx = e.clientX - lastMouse.x;
+                const dy = e.clientY - lastMouse.y;
+                camera.rotY += dx * 0.01;
+                camera.rotX += dy * 0.01;
+                lastMouse = { x: e.clientX, y: e.clientY };
+                render();
+            }
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            camera.zoom *= (1 - e.deltaY * 0.001);
+            camera.zoom = Math.max(0.5, Math.min(5, camera.zoom));
+            render();
+        });
+
+        // 控制函数
+        function resetView() {
+            camera = { x: 0, y: 0, z: 400, rotX: 0.3, rotY: 0.5, rotZ: 0, zoom: 1.5 };
+            render();
+        }
+
+        function viewTop() {
+            camera.rotX = 0;
+            camera.rotY = 0;
+            render();
+        }
+
+        function viewSide() {
+            camera.rotX = 0;
+            camera.rotY = Math.PI / 2;
+            render();
+        }
+
+        function viewFront() {
+            camera.rotX = 0;
+            camera.rotY = 0;
+            camera.rotZ = 0;
+            render();
+        }
+
+        function toggleLayer(layer) {
+            layers[layer] = !layers[layer];
+            const btn = document.getElementById('btn' + layer.charAt(0).toUpperCase() + layer.slice(1));
+            btn.classList.toggle('active');
+            render();
+        }
+
+        function toggleRotation() {
+            isRotating = !isRotating;
+            if (isRotating) render();
+        }
+
+        function setRenderMode(mode) {
+            // 简化实现
+            render();
+        }
+
+        function playWalkAnimation() {
+            alert('行走动画功能开发中...');
+        }
+
+        function explodeView() {
+            alert('爆炸视图功能开发中...');
+        }
+
+        // 初始渲染
+        render();
+    </script>
+</body>
+</html>
