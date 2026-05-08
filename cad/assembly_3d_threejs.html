@@ -219,7 +219,7 @@
             </div>
             <div class="legend-item">
                 <div class="legend-color" style="background: #FF8C00;"></div>
-                <span>锂电池 7.4V 2S (5000mAh, 132×40×17mm) ⚠️ 需扩大电池槽</span>
+                <span>锂电池 7.4V 2S (5000mAh, 132×40×17mm) ✓ 已修正</span>
             </div>
             <div class="legend-item">
                 <div class="legend-color" style="background: #228B22;"></div>
@@ -245,10 +245,10 @@
         <div>• 舵机: 12 个</div>
         <div>• U型支架: 8 个</div>
         <div>• 总重: ~1.5 kg</div>
-        <div style="margin-top: 10px; color: #ff6b6b;"><strong>⚠️ 设计问题:</strong></div>
-        <div style="color: #ff6b6b; font-size: 11px;">• 电池槽需扩大至135×42mm</div>
-        <div style="color: #ff6b6b; font-size: 11px;">• 舵机孔距需修正为10mm</div>
-        <div style="color: #ff6b6b; font-size: 11px;">详见 hardware_design_calib.md</div>
+        <div style="margin-top: 10px; color: #27ae60;"><strong>✓ 设计修正:</strong></div>
+        <div style="color: #27ae60; font-size: 11px;">• 电池槽已扩大至135×42mm</div>
+        <div style="color: #27ae60; font-size: 11px;">• 舵机孔距已修正为10mm</div>
+        <div style="color: #27ae60; font-size: 11px;">• STL孔位已修复为凹陷</div>
     </div>
 
     <!-- Three.js 库 (通过 CDN 加载) -->
@@ -521,7 +521,8 @@
             components.electronics.push(lm2);
             scene.add(lm2);
 
-            const battery = createBox(70, 30, 50, 0xFF8C00, [50, 48, -25]);
+            // 电池: 格氏 5000mAh 2S, 实际尺寸 132×40×17mm
+            const battery = createBox(132, 40, 17, 0xFF8C00, [50, 48, -25]);
             components.electronics.push(battery);
             scene.add(battery);
 
