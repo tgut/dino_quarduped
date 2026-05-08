@@ -396,15 +396,325 @@ route -n
 
 ---
 
-## 参考资源
+## WiFi 配置与网络路由
 
-- [Linux 网络配置](https://wiki.debian.org/NetworkConfiguration)
-- [netplan 文档](https://netplan.io/)
-- [IP 地址和子网掩码](https://en.wikipedia.org/wiki/Subnetwork)
-- [ARP 协议](https://en.wikipedia.org/wiki/Address_Resolution_Protocol)
+### WiFi 连接原理
+
+树莓派有两个网络接口：
+- **eth0**：USB 网络适配器（连接到台式机）
+- **wlan0**：WiFi 适配器（连接到路由器）
+
+**问题**：两个网络接口都有默认路由，需要设置正确的优先级
 
 ---
 
-**最后更新**：2026-05-08  
-**适用系统**：Debian/Ubuntu Linux  
-**树莓派型号**：Raspberry Pi 3B+/4B
+## WiFi 配置步骤
+
+### 步骤 1：编辑 WiFi 配置文件
+
+```bash
+# SSH 到树莓派
+ssh pi@192.168.100.74
+
+# 编辑 WPA Supplicant 配置
+sudo nano /etc/wpa_supplicant/wpa_supplicant.conf
+```
+
+**在文件末尾添加**：
+```
+network={
+    ssid="你的WiFi名称"
+    psk="你的WiFi密码"
+    key_mgmt=WPA-PSK
+}
+```
+
+**例如**：
+```
+network={
+    ssid="MyWiFi"
+    psk="password123"
+    key_mgmt=WPA-PSK
+}
+```
+
+### 步骤 2：重启 WiFi 服务
+
+```bash
+# 重启 WiFi 服务
+sudo systemctl restart wpa_supplicant
+
+# 重启网络接口
+sudo ip link set wlan0 down
+sudo ip link set wlan0 up
+
+# 等待连接
+sleep 10
+
+# 检查 WiFi 状态
+iwconfig wlan0
+```
+
+**预期输出**：
+```
+wlan0     IEEE 802.11  ESSID:"MyWiFi"
+          Mode:Managed  Frequency:2.462 GHz
+          Link Quality=66/70  Signal level=-44 dBm
+```
+
+### 步骤 3：检查 IP 地址
+
+```bash
+# 检查 wlan0 是否获得 IP
+ip addr show wlan0
+
+# 检查路由表
+route -n
+```
+
+---
+
+## 网络路由优先级问题
+
+### 问题现象
+
+WiFi 已连接但无法 ping 通外网：
+```
+$ iwconfig wlan0
+ESSID:"1101"  Mode:Managed  Link Quality=66/70
+
+$ ping -c 4 8.8.8.8
+100% packet loss  ← 无法连接外网
+```
+
+### 根本原因：路由表中的优先级冲突
+
+**路由表分析**：
+```
+Destination     Gateway         Metric  Iface
+0.0.0.0         192.168.100.1   202     eth0   ← 优先级高（202 < 303）
+0.0.0.0         192.168.10.1    303     wlan0  ← 优先级低
+```
+
+**问题**：
+1. 两个接口都有默认路由（0.0.0.0）
+2. Linux 使用 Metric 值决定优先级：**数值越小优先级越高**
+3. eth0 的 Metric=202，wlan0 的 Metric=303
+4. 系统优先使用 eth0（指向台式机 192.168.100.1）
+5. 但 eth0 无法连接外网（只能连接到台式机），导致 ping 失败
+
+**为什么会这样**？
+- eth0 在启动时自动获得 DHCP（来自台式机的 192.168.100.1）
+- wlan0 后启动，自动从路由器获得 DHCP（192.168.10.x）
+- 两个接口都添加了默认路由
+- Linux 按 Metric 选择，导致错误的优先级
+
+### 解决方案
+
+#### 方案 1：删除错误的默认路由（临时）
+
+```bash
+# 查看当前路由
+route -n
+
+# 删除指向 eth0 的默认路由
+sudo ip route del default via 192.168.100.1 dev eth0
+
+# 验证（只保留指向 wlan0 的默认路由）
+route -n
+
+# 测试
+ping -c 4 8.8.8.8
+```
+
+**缺点**：重启后失效
+
+#### 方案 2：配置路由优先级（永久）
+
+编辑 `/etc/dhcpcd.conf`：
+
+```bash
+sudo nano /etc/dhcpcd.conf
+```
+
+**添加 metric 配置**：
+```
+# eth0 优先级低（用于局域网连接）
+interface eth0
+metric 1000
+
+# wlan0 优先级高（用于外网连接）
+interface wlan0
+metric 300
+```
+
+**解释**：
+- `metric 1000`：eth0 优先级低，仅在本地网络使用
+- `metric 300`：wlan0 优先级高，成为默认网关
+- Metric 越小优先级越高
+
+**应用配置**：
+```bash
+sudo systemctl restart dhcpcd
+
+# 验证
+route -n
+ping -c 4 8.8.8.8
+```
+
+#### 方案 3：使用 policy routing（高级）
+
+如果需要更精细的控制，可以使用 policy routing：
+
+```bash
+# 创建两个路由表
+sudo bash -c 'echo "200 eth0_table" >> /etc/iproute2/rt_tables'
+sudo bash -c 'echo "201 wlan0_table" >> /etc/iproute2/rt_tables'
+
+# 配置 eth0 路由表
+sudo ip route add 192.168.100.0/24 dev eth0 table eth0_table
+sudo ip route add default via 192.168.100.1 table eth0_table
+
+# 配置 wlan0 路由表
+sudo ip route add 192.168.10.0/24 dev wlan0 table wlan0_table
+sudo ip route add default via 192.168.10.1 table wlan0_table
+
+# 设置规则
+sudo ip rule add from 192.168.100.0/24 table eth0_table
+sudo ip rule add from 192.168.10.0/24 table wlan0_table
+
+# 测试
+ping -c 4 8.8.8.8
+```
+
+---
+
+## 诊断 WiFi 连接问题
+
+### 完整诊断脚本
+
+创建 `diagnose_network.sh`：
+
+```bash
+#!/bin/bash
+echo "=== 树莓派网络诊断 ==="
+echo ""
+
+# 1. 检查 WiFi 状态
+echo "[1] WiFi 接口状态:"
+iwconfig wlan0
+echo ""
+
+# 2. 检查 IP 地址
+echo "[2] IP 地址配置:"
+echo "eth0:"
+ip addr show eth0 | grep "inet "
+echo "wlan0:"
+ip addr show wlan0 | grep "inet "
+echo ""
+
+# 3. 检查路由表
+echo "[3] 路由表:"
+route -n
+echo ""
+
+# 4. 检查 DNS
+echo "[4] DNS 配置:"
+cat /etc/resolv.conf
+echo ""
+
+# 5. 测试连接
+echo "[5] 连接测试:"
+echo "  ping 192.168.100.1 (台式机):"
+ping -c 2 192.168.100.1 | tail -1
+echo "  ping 192.168.10.1 (路由器):"
+ping -c 2 192.168.10.1 | tail -1
+echo "  ping 8.8.8.8 (外网):"
+ping -c 2 8.8.8.8 | tail -1
+echo ""
+
+# 6. 检查网络接口状态
+echo "[6] 接口状态:"
+ip link show eth0
+ip link show wlan0
+echo ""
+
+# 7. 检查 DHCP 租约
+echo "[7] DHCP 租约信息:"
+cat /var/lib/dhcpcd5/*.lease 2>/dev/null || echo "  (未找到 DHCP 租约文件)"
+```
+
+**使用**：
+```bash
+chmod +x diagnose_network.sh
+./diagnose_network.sh
+```
+
+---
+
+## 安装舵机驱动库
+
+WiFi 连接成功后，安装 adafruit 依赖：
+
+```bash
+# 1. 更新包管理器
+sudo apt-get update
+
+# 2. 安装 Python3 pip
+sudo apt-get install -y python3-pip
+
+# 3. 安装 adafruit 库
+pip3 install adafruit-circuitpython-servokit
+
+# 4. 验证安装
+python3 -c "from adafruit_servokit import ServoKit; print('✓ 安装成功')"
+```
+
+---
+
+## 完整配置流程
+
+### 首次设置
+
+1. **配置 WiFi**
+   ```bash
+   sudo nano /etc/wpa_supplicant/wpa_supplicant.conf
+   # 添加 WiFi 信息
+   
+   sudo systemctl restart wpa_supplicant
+   ```
+
+2. **检查 IP 地址**
+   ```bash
+   ip addr show wlan0  # 应该显示 192.168.10.x
+   ```
+
+3. **修复路由优先级**
+   ```bash
+   sudo nano /etc/dhcpcd.conf
+   # 添加 metric 配置
+   
+   sudo systemctl restart dhcpcd
+   ```
+
+4. **验证网络**
+   ```bash
+   ping -c 4 8.8.8.8  # 应该成功
+   ```
+
+5. **安装驱动库**
+   ```bash
+   sudo apt-get update
+   pip3 install adafruit-circuitpython-servokit
+   ```
+
+6. **开始舵机测试**
+   ```bash
+   python3 02_servo_test.py
+   ```
+
+### 日常使用
+
+- WiFi 应自动连接
+- 如果无法上网，运行诊断脚本
+- 路由优先级已固定，无需重新配置
